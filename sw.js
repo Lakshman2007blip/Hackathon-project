@@ -1,5 +1,5 @@
 // Cache the app shell so SmartSlate opens with no internet.
-const CACHE = 'smartslate-v1';
+const CACHE = 'smartslate-v2';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', e => {

@@ -31,8 +31,8 @@ header.top{background:#14233C;color:#fff;padding:12px 0}
 .brand small{display:block;font-size:.78rem;font-weight:400;opacity:.85}
 .tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .tools label{font-size:.85rem}
-select,input[type=text]{font:inherit;color:var(--ink);background:#fff;border:2px solid var(--line);border-radius:6px;padding:8px 10px;min-height:44px}
-:root[data-theme="contrast"] select,:root[data-theme="contrast"] input[type=text]{background:#000;color:#fff;border-color:#fff}
+select,input[type=text],input[type=password],input[type=search]{font:inherit;color:var(--ink);background:#fff;border:2px solid var(--line);border-radius:6px;padding:8px 10px;min-height:44px}
+:root[data-theme="contrast"] select,:root[data-theme="contrast"] input[type=text],:root[data-theme="contrast"] input[type=password],:root[data-theme="contrast"] input[type=search]{background:#000;color:#fff;border-color:#fff}
 .chip{font:inherit;font-size:.9rem;min-height:44px;min-width:44px;padding:6px 12px;border-radius:6px;border:2px solid #fff;background:transparent;color:#fff;cursor:pointer}
 .chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 
@@ -105,6 +105,18 @@ ul.plain{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
 .feedback.ok{color:var(--ok)}
 .feedback.no{color:var(--bad)}
 .note{color:var(--muted);font-size:.9rem}
+[hidden]{display:none!important}
+.userbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--card);border:2px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:12px}
+.userbar #who{font-weight:600}
+.userbar .actions{display:flex;gap:8px;flex-wrap:wrap}
+.seg{display:flex;gap:8px;margin-bottom:16px}
+.seg .btn[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:1px}
+.btn.danger{background:var(--bad);color:#fff;border-color:var(--bad)}
+:root[data-theme="contrast"] .btn.danger{background:#000;color:var(--bad);border-color:var(--bad)}
+.check.small{font-size:.92rem;margin-bottom:12px}
+.check.small input{width:20px;height:20px}
+details.card summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
+input[type=search]{min-width:200px;flex:1}
 </style>
 </head>
 <body>
@@ -112,7 +124,7 @@ ul.plain{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
 
 <header class="top">
   <div class="wrap bar-row">
-    <h1 class="brand">SmartSlate<small>Offline adaptive learning</small></h1>
+    <div class="brand">SmartSlate<small>Offline adaptive learning</small></div>
     <div class="tools">
       <label for="lang" id="lblLang">Language</label>
       <select id="lang">
@@ -132,6 +144,7 @@ ul.plain{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
     <span class="pill" id="net" data-on="true"><span class="dot" aria-hidden="true"></span><span id="netText">Online</span></span>
     <span id="pend">0</span>
     <button class="btn secondary small" id="btnSync" type="button">Sync now</button>
+    <button class="btn secondary small" id="btnInstall" type="button" hidden>Install app</button>
     <p class="sync-msg" id="syncMsg" role="status" aria-live="polite"></p>
   </div>
   <nav class="tabs" aria-label="Main">
@@ -139,19 +152,27 @@ ul.plain{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
     <button type="button" data-tab="teacher" id="tabTeacher">Teacher</button>
     <button type="button" data-tab="privacy" id="tabPrivacy">Privacy and standards</button>
   </nav>
+  <div class="userbar" id="userbar" hidden>
+    <span id="who"></span>
+    <span class="actions">
+      <button type="button" class="btn secondary small" id="btnProfile">My profile</button>
+      <button type="button" class="btn secondary small" id="btnLogout">Log out</button>
+    </span>
+  </div>
   <main id="app" tabindex="-1"></main>
 </div>
 
 <script>
 /* ============================================================
-   SmartSlate - offline-first adaptive practice (Class 7 Maths)
-   Single file, no external libraries, works with no internet.
+   SmartSlate v2 - offline-first adaptive practice (Class 7 Maths)
+   Accounts with passwords for students and teachers, editable
+   nicknames, and quality-of-life features. Single file, no
+   external libraries, works with no internet.
    ============================================================ */
 
-// Backend endpoints (Vercel serverless functions in the /api folder).
+// Backend: your Google Apps Script web app (see apps-script/Code.gs).
 // When the page is opened as a plain file (no web server), sync is simulated for the demo.
-const SYNC_URL  = "/api/sync";
-const CLASS_URL = "/api/class";
+const SYNC_URL = "https://script.google.com/macros/s/AKfycbwf2FRXgsR2rZByKC9KfqPUt88c5SNFOVry4lftYnfO0BJy5mzIBANovnr8mk6kUeNbUQ/exec";
 
 const MASTERY_GOAL = 0.8;   // a topic turns green at 80% mastery
 const RISK_BELOW   = 0.5;   // students under 50% overall are flagged for the teacher
@@ -238,6 +259,92 @@ const I18N = {
  }
 };
 
+/* ---------- Extra translations for accounts and quality-of-life features ---------- */
+const I18N_NEW = {
+ en:{
+  signIn:"Log in", createAccount:"Create account", password:"Password", confirmPassword:"Confirm password",
+  showPassword:"Show password", pwHint:"At least {n} characters. Do not reuse a password from another website.",
+  chooseProfile:"Who are you?", noProfiles:"No profiles on this device yet. Create an account to start.",
+  errNick:"Use 2 to 20 letters, numbers or spaces.", errNickTaken:"That nickname is already used on this device.",
+  errPwShort:"Password must have at least {n} characters.", errPwMatch:"The two passwords do not match.",
+  errWrongPw:"Wrong password. Try again.", errLocked:"Too many tries. Wait {s} seconds.",
+  errCrypto:"This browser cannot protect passwords. Open the site over https.",
+  legacyNote:"This is an older profile. The password you enter now becomes its password.",
+  signedInAs:"Signed in as {name}", profile:"My profile", logOut:"Log out",
+  editNickname:"Change nickname", save:"Save", nicknameSaved:"Nickname updated.",
+  changePassword:"Change password", currentPassword:"Current password", newPassword:"New password", passwordSaved:"Password changed.",
+  deleteAccount:"Delete my account", confirmDeleteAcc:"Delete this account and all its answers? This cannot be undone.", accountDeleted:"Account deleted.",
+  idleOut:"You were logged out because of inactivity.", todayCount:"Answered today: {n}", installApp:"Install app",
+  tGateLogin:"Teacher sign in", tSetup:"Create teacher account", tChecking:"Checking, please wait.",
+  tOffline:"Connect to the internet once to set up or sign in on this device.", setupCode:"Setup code (leave blank if none)",
+  tLock:"Lock", teacherActive:"Teacher mode", search:"Search students", sortScore:"Lowest score first", sortName:"Name A to Z",
+  exportCsv:"Export CSV", allStudents:"All students", profilesHere:"Student profiles on this device",
+  resetPw:"Reset password", removeProfile:"Remove profile", confirmRemove:"Remove {name} and all their answers?", removed:"Profile removed.",
+  resetPrompt:"Enter a temporary password for {name} (at least 4 characters). The student can change it in My profile.",
+  pwResetDone:"Password reset for {name}.", tChangePw:"Change teacher password", tPwChanged:"Teacher password changed.",
+  wrongTeacherPw:"Wrong teacher password.", tExists:"A teacher account already exists. Sign in instead.",
+  serverRejected:"The server did not accept this password. It may have been changed on another device. Sign in again.",
+  teacherCreated:"Teacher account created.", needTeacherOnline:"Connect to the internet to change the teacher password.",
+  netErr:"Could not reach the server. Check your connection and try again.", retry:"Try again", noMatches:"No students match your search.",
+  privAcc:"Account passwords"
+ },
+ hi:{
+  signIn:"लॉग इन करें", createAccount:"खाता बनाएँ", password:"पासवर्ड", confirmPassword:"पासवर्ड की पुष्टि करें",
+  showPassword:"पासवर्ड दिखाएँ", pwHint:"कम से कम {n} अक्षर। किसी दूसरी वेबसाइट का पासवर्ड दोबारा न रखें।",
+  chooseProfile:"आप कौन हैं?", noProfiles:"इस उपकरण पर अभी कोई प्रोफ़ाइल नहीं है। शुरू करने के लिए खाता बनाएँ।",
+  errNick:"2 से 20 अक्षर, अंक या स्पेस का उपयोग करें।", errNickTaken:"यह उपनाम इस उपकरण पर पहले से उपयोग में है।",
+  errPwShort:"पासवर्ड में कम से कम {n} अक्षर होने चाहिए।", errPwMatch:"दोनों पासवर्ड मेल नहीं खाते।",
+  errWrongPw:"गलत पासवर्ड। फिर से कोशिश करें।", errLocked:"बहुत ज़्यादा कोशिशें। {s} सेकंड रुकें।",
+  errCrypto:"यह ब्राउज़र पासवर्ड सुरक्षित नहीं कर सकता। साइट को https पर खोलें।",
+  legacyNote:"यह पुरानी प्रोफ़ाइल है। अभी आप जो पासवर्ड लिखेंगे वही इसका पासवर्ड बन जाएगा।",
+  signedInAs:"{name} के रूप में लॉग इन", profile:"मेरी प्रोफ़ाइल", logOut:"लॉग आउट",
+  editNickname:"उपनाम बदलें", save:"सहेजें", nicknameSaved:"उपनाम बदल दिया गया।",
+  changePassword:"पासवर्ड बदलें", currentPassword:"वर्तमान पासवर्ड", newPassword:"नया पासवर्ड", passwordSaved:"पासवर्ड बदल दिया गया।",
+  deleteAccount:"मेरा खाता हटाएँ", confirmDeleteAcc:"यह खाता और इसके सभी उत्तर हटाएँ? इसे वापस नहीं किया जा सकता।", accountDeleted:"खाता हटा दिया गया।",
+  idleOut:"निष्क्रिय रहने के कारण आपको लॉग आउट कर दिया गया।", todayCount:"आज के उत्तर: {n}", installApp:"ऐप इंस्टॉल करें",
+  tGateLogin:"शिक्षक लॉग इन", tSetup:"शिक्षक खाता बनाएँ", tChecking:"जाँच हो रही है, कृपया प्रतीक्षा करें।",
+  tOffline:"इस उपकरण पर सेटअप या लॉग इन के लिए एक बार इंटरनेट से जुड़ें।", setupCode:"सेटअप कोड (न हो तो खाली छोड़ें)",
+  tLock:"लॉक करें", teacherActive:"शिक्षक मोड", search:"विद्यार्थी खोजें", sortScore:"सबसे कम अंक पहले", sortName:"नाम के अनुसार",
+  exportCsv:"CSV निर्यात करें", allStudents:"सभी विद्यार्थी", profilesHere:"इस उपकरण की विद्यार्थी प्रोफ़ाइल",
+  resetPw:"पासवर्ड रीसेट करें", removeProfile:"प्रोफ़ाइल हटाएँ", confirmRemove:"{name} और उनके सभी उत्तर हटाएँ?", removed:"प्रोफ़ाइल हटा दी गई।",
+  resetPrompt:"{name} के लिए अस्थायी पासवर्ड लिखें (कम से कम 4 अक्षर)। विद्यार्थी इसे मेरी प्रोफ़ाइल में बदल सकता है।",
+  pwResetDone:"{name} का पासवर्ड रीसेट हो गया।", tChangePw:"शिक्षक पासवर्ड बदलें", tPwChanged:"शिक्षक पासवर्ड बदल दिया गया।",
+  wrongTeacherPw:"शिक्षक का पासवर्ड गलत है।", tExists:"शिक्षक खाता पहले से मौजूद है। लॉग इन करें।",
+  serverRejected:"सर्वर ने यह पासवर्ड स्वीकार नहीं किया। हो सकता है इसे किसी दूसरे उपकरण पर बदला गया हो। फिर से लॉग इन करें।",
+  teacherCreated:"शिक्षक खाता बनाया गया।", needTeacherOnline:"शिक्षक पासवर्ड बदलने के लिए इंटरनेट से जुड़ें।",
+  netErr:"सर्वर तक नहीं पहुँच सके। अपना कनेक्शन जाँचें और फिर कोशिश करें।", retry:"फिर कोशिश करें", noMatches:"आपकी खोज से कोई विद्यार्थी मेल नहीं खाता।",
+  privAcc:"खाते के पासवर्ड"
+ },
+ ta:{
+  signIn:"உள்நுழை", createAccount:"கணக்கை உருவாக்கு", password:"கடவுச்சொல்", confirmPassword:"கடவுச்சொல்லை உறுதிசெய்",
+  showPassword:"கடவுச்சொல்லைக் காட்டு", pwHint:"குறைந்தது {n} எழுத்துகள். வேறு இணையதளத்தின் கடவுச்சொல்லை மீண்டும் பயன்படுத்த வேண்டாம்.",
+  chooseProfile:"நீங்கள் யார்?", noProfiles:"இந்தச் சாதனத்தில் இன்னும் சுயவிவரங்கள் இல்லை. தொடங்க கணக்கை உருவாக்குங்கள்.",
+  errNick:"2 முதல் 20 எழுத்துகள், எண்கள் அல்லது இடைவெளிகளைப் பயன்படுத்தவும்.", errNickTaken:"இந்தப் புனைபெயர் இந்தச் சாதனத்தில் ஏற்கெனவே உள்ளது.",
+  errPwShort:"கடவுச்சொல்லில் குறைந்தது {n} எழுத்துகள் இருக்க வேண்டும்.", errPwMatch:"இரண்டு கடவுச்சொற்களும் பொருந்தவில்லை.",
+  errWrongPw:"தவறான கடவுச்சொல். மீண்டும் முயலவும்.", errLocked:"அதிக முயற்சிகள். {s} விநாடிகள் காத்திருக்கவும்.",
+  errCrypto:"இந்த உலாவியால் கடவுச்சொற்களைப் பாதுகாக்க முடியாது. தளத்தை https வழியாகத் திறக்கவும்.",
+  legacyNote:"இது பழைய சுயவிவரம். இப்போது நீங்கள் உள்ளிடும் கடவுச்சொல்லே இதன் கடவுச்சொல்லாகும்.",
+  signedInAs:"{name} ஆக உள்நுழைந்துள்ளீர்கள்", profile:"என் சுயவிவரம்", logOut:"வெளியேறு",
+  editNickname:"புனைபெயரை மாற்று", save:"சேமி", nicknameSaved:"புனைபெயர் மாற்றப்பட்டது.",
+  changePassword:"கடவுச்சொல்லை மாற்று", currentPassword:"தற்போதைய கடவுச்சொல்", newPassword:"புதிய கடவுச்சொல்", passwordSaved:"கடவுச்சொல் மாற்றப்பட்டது.",
+  deleteAccount:"என் கணக்கை நீக்கு", confirmDeleteAcc:"இந்தக் கணக்கையும் அதன் அனைத்து விடைகளையும் நீக்கலாமா? இதைத் திரும்பப் பெற முடியாது.", accountDeleted:"கணக்கு நீக்கப்பட்டது.",
+  idleOut:"செயலற்ற நிலையால் நீங்கள் வெளியேற்றப்பட்டீர்கள்.", todayCount:"இன்று பதிலளித்தவை: {n}", installApp:"ஆப்பை நிறுவு",
+  tGateLogin:"ஆசிரியர் உள்நுழைவு", tSetup:"ஆசிரியர் கணக்கை உருவாக்கு", tChecking:"சரிபார்க்கிறது, காத்திருக்கவும்.",
+  tOffline:"இந்தச் சாதனத்தில் அமைக்க அல்லது உள்நுழைய ஒருமுறை இணையத்துடன் இணைக்கவும்.", setupCode:"அமைப்புக் குறியீடு (இல்லையென்றால் காலியாக விடவும்)",
+  tLock:"பூட்டு", teacherActive:"ஆசிரியர் பயன்முறை", search:"மாணவர்களைத் தேடு", sortScore:"குறைந்த மதிப்பெண் முதலில்", sortName:"பெயர் வரிசை",
+  exportCsv:"CSV ஏற்றுமதி", allStudents:"அனைத்து மாணவர்கள்", profilesHere:"இந்தச் சாதனத்தில் உள்ள மாணவர் சுயவிவரங்கள்",
+  resetPw:"கடவுச்சொல்லை மீட்டமை", removeProfile:"சுயவிவரத்தை நீக்கு", confirmRemove:"{name} மற்றும் அவரது அனைத்து விடைகளையும் நீக்கலாமா?", removed:"சுயவிவரம் நீக்கப்பட்டது.",
+  resetPrompt:"{name} க்கான தற்காலிகக் கடவுச்சொல்லை உள்ளிடவும் (குறைந்தது 4 எழுத்துகள்). மாணவர் அதை என் சுயவிவரத்தில் மாற்றலாம்.",
+  pwResetDone:"{name} இன் கடவுச்சொல் மீட்டமைக்கப்பட்டது.", tChangePw:"ஆசிரியர் கடவுச்சொல்லை மாற்று", tPwChanged:"ஆசிரியர் கடவுச்சொல் மாற்றப்பட்டது.",
+  wrongTeacherPw:"ஆசிரியர் கடவுச்சொல் தவறு.", tExists:"ஆசிரியர் கணக்கு ஏற்கெனவே உள்ளது. உள்நுழையவும்.",
+  serverRejected:"சேவையகம் இந்தக் கடவுச்சொல்லை ஏற்கவில்லை. வேறு சாதனத்தில் மாற்றப்பட்டிருக்கலாம். மீண்டும் உள்நுழையவும்.",
+  teacherCreated:"ஆசிரியர் கணக்கு உருவாக்கப்பட்டது.", needTeacherOnline:"ஆசிரியர் கடவுச்சொல்லை மாற்ற இணையத்துடன் இணைக்கவும்.",
+  netErr:"சேவையகத்தை அடைய முடியவில்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயலவும்.", retry:"மீண்டும் முயல்க", noMatches:"உங்கள் தேடலுக்குப் பொருந்தும் மாணவர்கள் இல்லை.",
+  privAcc:"கணக்குக் கடவுச்சொற்கள்"
+ }
+};
+for (const l in I18N_NEW) Object.assign(I18N[l], I18N_NEW[l]);
+
 /* ---------- Question bank (Class 7 Maths) ----------
    d:true  = used in the 10-question diagnostic
    d:false = extra practice questions                       */
@@ -272,12 +379,21 @@ const QS = [
 ];
 const DIAG_ORDER = ["i1","f1","e1","a1","r1","i2","f2","e2","a2","r2"];
 
+/* ---------- Settings ---------- */
+const IDLE_MS = 5 * 60 * 1000;        // auto log-out after 5 minutes without use (shared school devices)
+const PW_MIN_STUDENT = 4, PW_MIN_TEACHER = 6;
+const PBKDF2_ITER = 150000;
+const NICK_RE = /^[\p{L}\p{M}\p{N} ._-]{2,20}$/u;
+
 /* ---------- Storage (all on this device) ---------- */
 const KEY = "smartslate.v1";
-const blank = () => ({students:[], attempts:[], current:null, settings:{lang:"en", contrast:false, scale:1, demo:true}});
+const blank = () => ({students:[], attempts:[], teacher:null, pendingDeletes:[], settings:{lang:"en", contrast:false, scale:1, demo:true}});
 let db;
 try { db = JSON.parse(localStorage.getItem(KEY)) || blank(); } catch { db = blank(); }
+db = Object.assign(blank(), db);
 db.settings = Object.assign(blank().settings, db.settings);
+// Profiles made before passwords existed must set one the first time they sign in.
+db.students.forEach(s => { if (!s.hash) s.needsPassword = true; });
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {} };
 
 /* ---------- Helpers ---------- */
@@ -295,16 +411,33 @@ const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { c
 const pct = x => Math.round(x * 100);
 const fill = f => f >= MASTERY_GOAL ? "hi" : f >= 0.5 ? "mid" : "";
 const level = f => f >= MASTERY_GOAL ? T("strong") : f >= 0.5 ? T("gettingThere") : T("needsWork");
+const serverAvailable = () => !!SYNC_URL && location.protocol.startsWith("http");
+
+/* ---------- Passwords: hashed in the browser, never stored or sent in plain text ---------- */
+const enc = new TextEncoder();
+const toHex = buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+const fromHex = h => new Uint8Array(h.match(/../g).map(x => parseInt(x, 16)));
+const randHex = n => toHex(crypto.getRandomValues(new Uint8Array(n)));
+const cryptoOK = () => !!(window.crypto && crypto.subtle);
+async function pbkdf2(password, saltHex, iter = PBKDF2_ITER) {
+  const key = await crypto.subtle.importKey("raw", enc.encode(password.normalize("NFKC")), "PBKDF2", false, ["deriveBits"]);
+  return toHex(await crypto.subtle.deriveBits({name:"PBKDF2", hash:"SHA-256", salt: fromHex(saltHex), iterations: iter}, key, 256));
+}
+async function sha256Hex(s) { return toHex(await crypto.subtle.digest("SHA-256", enc.encode(s))); }
+
+// Slows down guessing on this device: 5 wrong tries = 30 second wait.
+const fails = {};
+function waitLeft(key) { const f = fails[key]; return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0; }
+function failed(key) { const f = fails[key] || (fails[key] = {n:0, until:0}); if (++f.n >= 5) { f.n = 0; f.until = Date.now() + 30000; } }
+function succeeded(key) { delete fails[key]; }
 
 /* ---------- Learning model ---------- */
-// Per-topic tally for a list of attempts.
 function tally(attempts) {
   const per = {}; TOPICS.forEach(t => per[t.id] = {c:0, n:0});
   attempts.forEach(a => { per[a.topic].n++; if (a.ok) per[a.topic].c++; });
   const c = attempts.filter(a => a.ok).length;
   return {per, c, n: attempts.length};
 }
-// Smoothed mastery: starts at 50% and moves with evidence.
 const mastery = p => (p.c + 1) / (p.n + 2);
 
 /* ---------- Sample class for the teacher demo (deterministic) ---------- */
@@ -312,7 +445,7 @@ function demoClass() {
   let a = 20260901;
   const rnd = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const names = ["Arun","Meena","Ravi","Divya","Karthik","Priya","Sana","Imran","Lakshmi","Vikram","Anitha","Rohan","Fatima","Suresh","Kavya","Manoj","Nisha","Faisal","Deepa","Aman","Sneha","Bala","Pooja","Irfan"];
-  const bias = {int:.75, fra:.55, equ:.62, are:.42, rat:.35};   // this class is weakest on ratio and area
+  const bias = {int:.75, fra:.55, equ:.62, are:.42, rat:.35};
   return names.map((name, i) => {
     const ability = 0.25 + rnd() * 0.6, attempts = [];
     TOPICS.forEach(t => {
@@ -323,8 +456,16 @@ function demoClass() {
   });
 }
 const DEMO = demoClass();
+
+/* ---------- Session (memory only, so closing the tab logs everyone out) ---------- */
+const session = {sid:null, teacher:false, th:null, last:Date.now()};
+const state = {view:"welcome", authTab:"login", pickId:null, diag:null, practice:null, sel:null, focus:false,
+               remote:null, tGate:{mode:"checking"}, q:"", sort:"score", flash:""};
+const me = () => db.students.find(s => s.id === session.sid);
+const myAttempts = () => db.attempts.filter(a => a.sid === session.sid);
+const STUDENT_VIEWS = ["welcome", "diag", "results", "practice", "profile"];
+
 function classRoster() {
-  // Students already synced to the server are shown from the server copy, so nobody is counted twice.
   const remote = (state.remote || []).map(s => {
     const attempts = [];
     TOPICS.forEach(t => { const x = s.topics[t.id]; if (x) for (let k = 0; k < x.n; k++) attempts.push({topic: t.id, ok: k < x.c}); });
@@ -335,46 +476,135 @@ function classRoster() {
     .map(s => ({id:s.id, name:s.name, attempts: db.attempts.filter(a => a.sid === s.id), demo:false}));
   return remote.concat(real, db.settings.demo ? DEMO : []).filter(s => s.attempts.length);
 }
+function summaries() {
+  return classRoster().map(s => {
+    const t = tally(s.attempts);
+    const worst = TOPICS.map(x => ({id:x.id, f: t.per[x.id].n ? t.per[x.id].c / t.per[x.id].n : 1})).sort((a, b) => a.f - b.f)[0];
+    return {name:s.name, f: t.n ? t.c / t.n : 0, c:t.c, n:t.n, worst:worst.id, per:t.per};
+  });
+}
 
-/* ---------- App state ---------- */
-const state = {view:"welcome", diag:null, practice:null, sel:null, focus:false, remote:null};
-const me = () => db.students.find(s => s.id === db.current);
-const myAttempts = () => db.attempts.filter(a => a.sid === db.current);
-function go(view) { state.view = view; state.sel = null; state.focus = true; render(); if (view === "teacher") loadRemote(); }
+/* ---------- Navigation ---------- */
+function studentHome() {
+  const d = myAttempts().filter(a => a.mode === "diagnostic").length;     // resume a half-finished diagnostic
+  if (d >= DIAG_ORDER.length) return "results";
+  state.diag = {i:d, order:DIAG_ORDER.slice(), opts:[]};
+  return "diag";
+}
+function go(view) {
+  state.view = view; state.sel = null; state.focus = true;
+  if (view === "teacher" && !session.teacher) prepareTeacher();
+  render();
+  if (view === "teacher" && session.teacher) loadRemote();
+}
+function flash(text) { state.flash = text; }
 
-// Teacher view: fetch results synced from every student device.
-async function loadRemote() {
-  if (!SYNC_URL || !navigator.onLine || !location.protocol.startsWith("http")) return;
+/* ---------- Server calls ---------- */
+async function api(payload) {
+  const r = await fetch(SYNC_URL, {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify(payload)});
+  return r.json();
+}
+async function prepareTeacher() {
+  if (db.teacher) { state.tGate = {mode:"login", salt: db.teacher.salt}; return; }
+  if (!serverAvailable()) { state.tGate = {mode:"setup", local:true}; return; }
+  if (!navigator.onLine) { state.tGate = {mode:"offline"}; return; }
+  state.tGate = {mode:"checking"};
   try {
-    const ask = pin => fetch(CLASS_URL, {headers: {"x-teacher-pin": pin}});
-    let pin = sessionStorage.getItem("ss.pin") || "";
-    let r = await ask(pin);
-    if (r.status === 401) {
-      pin = prompt("Teacher PIN") || "";
-      r = await ask(pin);
-      if (r.ok) sessionStorage.setItem("ss.pin", pin);
-    }
-    if (!r.ok) return;
-    state.remote = (await r.json()).students;
+    const j = await api({action:"teacherStatus"});
+    state.tGate = j.exists ? {mode:"login", salt:j.salt} : {mode:"setup"};
+  } catch { state.tGate = {mode:"offline"}; }
+  if (state.view === "teacher" && !session.teacher) { state.focus = false; render(); }
+}
+async function loadRemote() {
+  if (!serverAvailable() || !navigator.onLine || !session.teacher || !session.th) return;
+  try {
+    const j = await api({action:"class", th: session.th});
+    if (j.status === 401) { lockTeacher(false); db.teacher = null; save(); flash(T("serverRejected")); go("teacher"); return; }
+    if (!j.ok) return;
+    state.remote = j.students;
     if (state.view === "teacher") { state.focus = false; render(); }
   } catch {}
 }
+async function syncNow(silent) {
+  const say2 = t => { if (!silent || t === T("syncFail")) $("#syncMsg").textContent = t; };
+  const pendIds = db.attempts.filter(a => !a.synced);
+  const renames = db.students.filter(s => s.renamePending).map(s => ({sid:s.id, name:s.name}));
+  const deletes = (db.pendingDeletes || []).slice();
+  if (!navigator.onLine) { say2(T("syncOffline")); return; }
+  if (!pendIds.length && !renames.length && !deletes.length) { say2(T("syncedMsg")); return; }
+  try {
+    const nameOf = id => { const s = db.students.find(x => x.id === id); return s ? s.name : ""; };
+    const records = pendIds.map(a => ({sid:a.sid, name:nameOf(a.sid), qid:a.qid, topic:a.topic, ok:a.ok, ts:a.ts}));
+    if (serverAvailable()) {
+      const j = await api({action:"sync", records, renames, deletes});
+      if (!j.ok) throw new Error(j.error || "bad response");
+    } else await new Promise(r => setTimeout(r, 600));   // simulated server when opened as a plain file
+    pendIds.forEach(a => a.synced = true);
+    db.students.forEach(s => { if (s.renamePending) delete s.renamePending; });
+    db.pendingDeletes = (db.pendingDeletes || []).filter(id => !deletes.includes(id));
+    save(); say2(T("syncedMsg"));
+  } catch { say2(T("syncFail")); }
+  netStatus();
+}
 
 /* ---------- Views ---------- */
+const pwField = (p, name, label, auto) =>
+  `<div class="field"><label for="${p}-${name}">${label}</label><input type="password" id="${p}-${name}" name="${name}" data-pw autocomplete="${auto}"></div>`;
+const showPw = () => `<label class="check small"><input type="checkbox" data-showpw><span>${T("showPassword")}</span></label>`;
+const msgBox = () => `<p class="msg err" id="formMsg" role="alert"></p>`;
+
 const views = {
  welcome() {
-  const list = db.students.map(s => `<li><button type="button" class="btn secondary small" data-act="continue" data-id="${esc(s.id)}">${esc(s.name)}</button></li>`).join("");
-  return `
-   <h1>${T("welcomeTitle")}</h1>
-   <p class="lead">${T("welcomeLead")}</p>
-   <div class="card">
-     <div class="field"><label for="nick">${T("nickname")}</label>
-       <input type="text" id="nick" maxlength="20" autocomplete="off"></div>
-     <label class="check"><input type="checkbox" id="consent"><span>${T("consent")}</span></label>
-     <button type="button" class="btn" data-act="begin">${T("start")}</button>
-     <p class="msg err" id="formMsg" role="alert"></p>
-   </div>
-   ${list ? `<h2>${T("returning")}</h2><ul class="plain">${list}</ul>` : ""}`;
+  const has = db.students.length > 0, tab = has ? state.authTab : "create";
+  const tabs = has ? `<div class="seg" role="group">
+     <button type="button" class="btn small ${tab === "login" ? "" : "secondary"}" data-act="authTab" data-auth="login" aria-pressed="${tab === "login"}">${T("signIn")}</button>
+     <button type="button" class="btn small ${tab === "create" ? "" : "secondary"}" data-act="authTab" data-auth="create" aria-pressed="${tab === "create"}">${T("createAccount")}</button></div>` : "";
+  let body;
+  if (tab === "login") {
+    const sorted = db.students.slice().sort((a, b) => a.name.localeCompare(b.name));
+    const pick = db.students.find(s => s.id === state.pickId) || sorted[0];
+    const opts = sorted.map(s => `<option value="${esc(s.id)}" ${s.id === pick.id ? "selected" : ""}>${esc(s.name)}</option>`).join("");
+    body = `<form data-form="login" novalidate>
+      <div class="field"><label for="lg-sid">${T("chooseProfile")}</label><select id="lg-sid" name="sid" data-pick>${opts}</select></div>
+      ${pick.needsPassword ? `<p class="note">${T("legacyNote")}</p>` : ""}
+      ${pwField("lg", "pw", T("password"), "current-password")}
+      ${showPw()}
+      <button type="submit" class="btn">${T("signIn")}</button>${msgBox()}</form>`;
+  } else {
+    body = `<form data-form="create" novalidate>
+      <div class="field"><label for="cr-nick">${T("nickname")}</label><input type="text" id="cr-nick" name="nick" maxlength="20" autocomplete="off"></div>
+      ${pwField("cr", "pw", T("password"), "new-password")}
+      ${pwField("cr", "pw2", T("confirmPassword"), "new-password")}
+      <p class="note">${T("pwHint", {n: PW_MIN_STUDENT})}</p>
+      ${showPw()}
+      <label class="check"><input type="checkbox" name="consent"><span>${T("consent")}</span></label>
+      <button type="submit" class="btn">${T("createAccount")}</button>${msgBox()}</form>`;
+  }
+  return `<h1>${T("welcomeTitle")}</h1><p class="lead">${T("welcomeLead")}</p>
+    ${!has ? `<p class="note">${T("noProfiles")}</p>` : ""}
+    <div class="card">${tabs}${body}</div>`;
+ },
+
+ profile() {
+  const s = me();
+  return `<h1>${T("profile")}</h1>
+   <div class="card"><h2>${T("editNickname")}</h2>
+     <form data-form="rename" novalidate>
+       <div class="field"><label for="pf-nick">${T("nickname")}</label><input type="text" id="pf-nick" name="nick" maxlength="20" value="${esc(s.name)}" autocomplete="off"></div>
+       <button type="submit" class="btn">${T("save")}</button></form></div>
+   <div class="card"><h2>${T("changePassword")}</h2>
+     <form data-form="chpw" novalidate>
+       ${pwField("cp", "cur", T("currentPassword"), "current-password")}
+       ${pwField("cp", "pw", T("newPassword"), "new-password")}
+       ${pwField("cp", "pw2", T("confirmPassword"), "new-password")}
+       ${showPw()}
+       <button type="submit" class="btn">${T("save")}</button></form></div>
+   <div class="card"><h2>${T("deleteAccount")}</h2>
+     <form data-form="delacc" novalidate>
+       ${pwField("da", "pw", T("password"), "current-password")}
+       <button type="submit" class="btn danger">${T("deleteAccount")}</button></form></div>
+   ${msgBox()}
+   <button type="button" class="btn secondary" data-act="toResults">${T("back")}</button>`;
  },
 
  diag() {
@@ -389,12 +619,14 @@ const views = {
      <button type="button" class="btn" data-act="diagNext">${last ? T("finish") : T("next")}</button>
      <button type="button" class="btn secondary" data-act="listen">${T("listen")}</button>
    </div>
-   <p class="msg err" id="formMsg" role="alert"></p>`;
+   ${msgBox()}`;
  },
 
  results() {
-  const st = tally(myAttempts()), name = me() ? me().name : "";
-  const rows = TOPICS.map(t => ({t, m: mastery(st.per[t.id]), p: st.per[t.id]})).sort((a, b) => a.m - b.m);
+  const mine = myAttempts(), st = tally(mine), name = me() ? me().name : "";
+  const today = new Date().setHours(0, 0, 0, 0);
+  const todayN = mine.filter(a => a.ts >= today).length;
+  const rows = TOPICS.map(t => ({t, m: mastery(st.per[t.id])})).sort((a, b) => a.m - b.m);
   const meters = rows.map((r, i) => `
    <div class="meter">
      <div class="name">${esc(topicName(r.t.id))}${i === 0 && r.m < MASTERY_GOAL ? `<span class="here">${T("startHere")}</span>` : ""}</div>
@@ -407,9 +639,9 @@ const views = {
    <p class="lead">${T("resultsLead")}</p>
    <div class="card">
      <p style="margin:0"><strong>${T("overall")}:</strong> ${pct(st.n ? st.c / st.n : 0)}% &middot; ${T("scoreOf", {c: st.c, t: st.n})}</p>
+     <p class="note" style="margin:6px 0 0">${T("todayCount", {n: todayN})}</p>
    </div>
-   <div class="card"><h2>${T("mastery")}</h2>${meters}</div>
-   <button type="button" class="btn secondary" data-act="switch">${T("switchStudent")}</button>`;
+   <div class="card"><h2>${T("mastery")}</h2>${meters}</div>`;
  },
 
  practice() {
@@ -432,13 +664,14 @@ const views = {
      <button type="button" class="btn secondary" data-act="listen">${T("listen")}</button>
      <button type="button" class="btn secondary" data-act="toResults">${T("back")}</button>
    </div>
-   <p class="msg err" id="formMsg" role="alert"></p>`;
+   ${msgBox()}`;
  },
 
  teacher() {
+  if (!session.teacher) return teacherGate();
   const roster = classRoster();
   const demoBtn = `<button type="button" class="btn secondary small" data-act="toggleDemo">${db.settings.demo ? T("hideDemo") : T("showDemo")}</button>`;
-  if (!roster.length) return `<h1>${T("teacherTitle")}</h1><p class="lead">${T("noData")}</p>${demoBtn}`;
+  if (!roster.length) return `<h1>${T("teacherTitle")}</h1><p class="lead">${T("noData")}</p>${demoBtn}${teacherExtras()}`;
   const all = tally([].concat(...roster.map(s => s.attempts)));
   const weak = TOPICS.map(t => ({t, f: all.per[t.id].n ? all.per[t.id].c / all.per[t.id].n : 0})).sort((a, b) => a.f - b.f);
   const meters = weak.map(w => `
@@ -447,11 +680,7 @@ const views = {
      <div class="bar" role="progressbar" aria-label="${esc(topicName(w.t.id))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct(w.f)}"><span class="${fill(w.f)}" style="width:${pct(w.f)}%"></span></div>
      <div class="tag">${pct(w.f)}% &middot; ${level(w.f)}</div>
    </div>`).join("");
-  const flagged = roster.map(s => {
-    const t = tally(s.attempts);
-    const worst = TOPICS.map(x => ({id: x.id, f: t.per[x.id].n ? t.per[x.id].c / t.per[x.id].n : 1})).sort((a, b) => a.f - b.f)[0];
-    return {name: s.name, f: t.n ? t.c / t.n : 0, c: t.c, n: t.n, worst: worst.id};
-  }).filter(s => s.f < RISK_BELOW).sort((a, b) => a.f - b.f).slice(0, 8);
+  const flagged = summaries().filter(s => s.f < RISK_BELOW).sort((a, b) => a.f - b.f).slice(0, 8);
   const rows = flagged.map(s => `<tr><td>${esc(s.name)}</td><td>${pct(s.f)}% (${T("scoreOf", {c: s.c, t: s.n})})</td><td>${esc(topicName(s.worst))}</td></tr>`).join("");
   return `
    <h1>${T("teacherTitle")}</h1>
@@ -460,7 +689,15 @@ const views = {
    <div class="card"><h2>${T("atRisk")}</h2>
      ${flagged.length ? `<div class="scroll"><table><thead><tr><th>${T("colStudent")}</th><th>${T("colScore")}</th><th>${T("colWeak")}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p>${T("noAtRisk")}</p>`}
    </div>
-   ${demoBtn}`;
+   <div class="card"><h2>${T("allStudents")}</h2>
+     <div class="row" style="margin-top:0">
+       <input type="search" id="q" placeholder="${T("search")}" aria-label="${T("search")}" value="${esc(state.q)}" autocomplete="off">
+       <select id="sortSel" aria-label="sort"><option value="score" ${state.sort === "score" ? "selected" : ""}>${T("sortScore")}</option><option value="name" ${state.sort === "name" ? "selected" : ""}>${T("sortName")}</option></select>
+       <button type="button" class="btn secondary small" data-act="exportCsv">${T("exportCsv")}</button>
+     </div>
+     <div class="scroll" id="rosterBox">${rosterHTML()}</div>
+   </div>
+   ${demoBtn}${teacherExtras()}`;
  },
 
  privacy() {
@@ -471,10 +708,11 @@ const views = {
      <thead><tr><th>What the app does</th><th>Standard and principle</th></tr></thead>
      <tbody>
       <tr><td>Asks for a nickname and a parent or teacher consent tick before saving anything.</td><td>IS 17428 (Data Privacy Assurance): consent, data minimization</td></tr>
-      <tr><td>Collects only a nickname and answers. Sync sends just the nickname, a random student id and the answers, which is what the consent tick covers.</td><td>IS 17428: data minimization, purpose limitation</td></tr>
-      <tr><td>"Delete all data on this device" removes students and answers on demand.</td><td>IS 17428: retention limits, erasure</td></tr>
-      <tr><td>Stores data on the device, loads no third-party scripts or fonts, and sends only on an explicit or reconnect sync.</td><td>IS/ISO/IEC 27001: information security controls</td></tr>
-      <tr><td>Diagnostic, personalised practice path and class-wide teacher view.</td><td>IS/ISO 21001: learner focus, monitoring and measuring learning outcomes</td></tr>
+      <tr><td>Collects only a nickname and answers. Sync sends the nickname, a random student id and the answers to the teacher's class.</td><td>IS 17428: data minimization, purpose limitation</td></tr>
+      <tr><td>Students can rename or delete their account at any time. Deleting removes the data from the device and from the class sheet.</td><td>IS 17428: retention limits, erasure, rectification</td></tr>
+      <tr><td>${T("privAcc")}: hashed in the browser with PBKDF2 and a random salt, never stored or sent in plain text. Student passwords never leave the device. The teacher password is stored on the server only as a second hash, with a lockout after 5 wrong tries.</td><td>IS/ISO/IEC 27001: access control, cryptographic controls</td></tr>
+      <tr><td>Automatic log-out after 5 idle minutes on shared devices. No third-party scripts or fonts.</td><td>IS/ISO/IEC 27001: information security controls</td></tr>
+      <tr><td>Diagnostic, personalised practice path, class-wide teacher view and CSV export.</td><td>IS/ISO 21001: learner focus, monitoring and measuring learning outcomes</td></tr>
       <tr><td>Hindi, Tamil and English, read-aloud, adjustable text size and a high-contrast mode. All content is text, so nothing needs captions.</td><td>BIS / ICT accessibility guidance (check the latest version)</td></tr>
      </tbody></table></div>
    <button type="button" class="btn secondary" data-act="wipe">${T("deleteData")}</button>
@@ -483,7 +721,6 @@ const views = {
 };
 
 function questionCard(q, opts, checked) {
-  const p = state.practice;
   const items = opts.map((o, i) => {
     let cls = "opt";
     if (checked) { if (o === q.a) cls += " right"; else if (state.sel === i) cls += " wrong"; }
@@ -492,7 +729,63 @@ function questionCard(q, opts, checked) {
   return `<div class="sheet"><fieldset><legend>${esc(tr(q.s))}</legend><div class="opts">${items}</div></fieldset></div>`;
 }
 
+/* ----- teacher helpers ----- */
+function teacherGate() {
+  const g = state.tGate;
+  if (g.mode === "checking") return `<h1>${T("tGateLogin")}</h1><p class="lead">${T("tChecking")}</p>`;
+  if (g.mode === "offline") return `<h1>${T("tGateLogin")}</h1><p class="lead">${T("tOffline")}</p><button type="button" class="btn" data-act="retryGate">${T("retry")}</button>`;
+  if (g.mode === "setup") return `<h1>${T("tSetup")}</h1>
+    <div class="card"><form data-form="tsetup" novalidate>
+      ${pwField("ts", "pw", T("password"), "new-password")}
+      ${pwField("ts", "pw2", T("confirmPassword"), "new-password")}
+      <p class="note">${T("pwHint", {n: PW_MIN_TEACHER})}</p>
+      ${g.local ? "" : `<div class="field"><label for="ts-code">${T("setupCode")}</label><input type="password" id="ts-code" name="code" data-pw autocomplete="off"></div>`}
+      ${showPw()}
+      <button type="submit" class="btn">${T("tSetup")}</button>${msgBox()}</form></div>`;
+  return `<h1>${T("tGateLogin")}</h1>
+    <div class="card"><form data-form="tlogin" novalidate>
+      ${pwField("tl", "pw", T("password"), "current-password")}
+      ${showPw()}
+      <button type="submit" class="btn">${T("signIn")}</button>${msgBox()}</form></div>`;
+}
+function rosterHTML() {
+  let list = summaries();
+  const q = state.q.trim().toLowerCase();
+  if (q) list = list.filter(s => s.name.toLowerCase().includes(q));
+  list.sort(state.sort === "name" ? (a, b) => a.name.localeCompare(b.name) : (a, b) => a.f - b.f);
+  if (!list.length) return `<p>${T("noMatches")}</p>`;
+  return `<table><thead><tr><th>${T("colStudent")}</th><th>${T("colScore")}</th><th>${T("colWeak")}</th></tr></thead><tbody>${
+    list.slice(0, 200).map(s => `<tr><td>${esc(s.name)}</td><td>${pct(s.f)}%</td><td>${esc(topicName(s.worst))}</td></tr>`).join("")}</tbody></table>`;
+}
+function teacherExtras() {
+  const profiles = db.students.map(s => `<tr><td>${esc(s.name)}</td><td>
+      <button type="button" class="btn secondary small" data-act="resetPw" data-id="${esc(s.id)}">${T("resetPw")}</button>
+      <button type="button" class="btn secondary small" data-act="removeProfile" data-id="${esc(s.id)}">${T("removeProfile")}</button></td></tr>`).join("");
+  return `
+   ${db.students.length ? `<div class="card"><h2>${T("profilesHere")}</h2><div class="scroll"><table><tbody>${profiles}</tbody></table></div></div>` : ""}
+   <details class="card"><summary><strong>${T("tChangePw")}</strong></summary>
+     <form data-form="tchpw" novalidate style="margin-top:12px">
+       ${pwField("tc", "cur", T("currentPassword"), "current-password")}
+       ${pwField("tc", "pw", T("newPassword"), "new-password")}
+       ${pwField("tc", "pw2", T("confirmPassword"), "new-password")}
+       ${showPw()}
+       <button type="submit" class="btn">${T("save")}</button>${msgBox()}</form></details>`;
+}
+const csvCell = v => { let s = String(v); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+function exportCSV() {
+  const head = ["Student", "Overall %", "Answered"].concat(TOPICS.map(t => t.n.en + " %"));
+  const rows = summaries().sort((a, b) => a.name.localeCompare(b.name)).map(s =>
+    [s.name, pct(s.f), s.n].concat(TOPICS.map(t => s.per[t.id].n ? pct(s.per[t.id].c / s.per[t.id].n) : "")));
+  const csv = [head].concat(rows).map(r => r.map(csvCell).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], {type:"text/csv;charset=utf-8"}));
+  a.download = "smartslate-class.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 /* ---------- Rendering ---------- */
+const app = $("#app");
 function chrome() {
   const root = document.documentElement;
   root.lang = lang();
@@ -507,39 +800,179 @@ function chrome() {
   $("#tabStudent").textContent = T("tabStudent");
   $("#tabTeacher").textContent = T("tabTeacher");
   $("#tabPrivacy").textContent = T("tabPrivacy");
-  const studentViews = ["welcome", "diag", "results", "practice"];
-  $("#tabStudent").setAttribute("aria-current", studentViews.includes(state.view) ? "page" : "false");
+  $("#tabStudent").setAttribute("aria-current", STUDENT_VIEWS.includes(state.view) ? "page" : "false");
   $("#tabTeacher").setAttribute("aria-current", state.view === "teacher" ? "page" : "false");
   $("#tabPrivacy").setAttribute("aria-current", state.view === "privacy" ? "page" : "false");
   $("#btnSync").textContent = T("syncNow");
+  $("#btnInstall").textContent = T("installApp");
+  // signed-in bar
+  const bar = $("#userbar"), asStudent = STUDENT_VIEWS.includes(state.view) && session.sid && me();
+  const asTeacher = state.view === "teacher" && session.teacher;
+  bar.hidden = !(asStudent || asTeacher);
+  if (asStudent) { $("#who").textContent = T("signedInAs", {name: me().name}); $("#btnProfile").hidden = false; $("#btnProfile").textContent = T("profile"); $("#btnLogout").textContent = T("logOut"); }
+  else if (asTeacher) { $("#who").textContent = T("teacherActive"); $("#btnProfile").hidden = true; $("#btnLogout").textContent = T("tLock"); }
   netStatus();
 }
 function netStatus() {
-  const on = navigator.onLine, n = db.attempts.filter(a => !a.synced).length;
+  const on = navigator.onLine;
+  const n = db.attempts.filter(a => !a.synced).length + db.students.filter(s => s.renamePending).length + (db.pendingDeletes || []).length;
   $("#net").dataset.on = on;
   $("#netText").textContent = on ? T("online") : T("offline");
   $("#pend").textContent = T("pending", {n});
 }
 function render() {
   chrome();
-  app.innerHTML = views[state.view]();
+  const note = state.flash ? `<p class="msg good" role="status">${esc(state.flash)}</p>` : "";
+  state.flash = "";
+  app.innerHTML = note + views[state.view]();
   if (state.focus) { const h = app.querySelector("h1"); if (h) { h.tabIndex = -1; h.focus(); } state.focus = false; }
 }
-const app = $("#app");
-const say = (id, text, cls) => { const el = $(id); if (el) { el.textContent = text; if (cls) el.className = "msg " + cls; } };
+const say = (id, text, cls) => { const el = $(id); if (el) { el.textContent = text; el.className = "msg " + (cls || "err"); } };
 
-/* ---------- Actions ---------- */
+/* ---------- Account actions ---------- */
+const cleanNick = s => s.trim().replace(/\s+/g, " ");
+function nickError(name, exceptId) {
+  if (!NICK_RE.test(name)) return T("errNick");
+  if (db.students.some(s => s.id !== exceptId && s.name.toLowerCase() === name.toLowerCase())) return T("errNickTaken");
+  return null;
+}
+function pwError(pw, pw2, min) {
+  if (pw.length < min) return T("errPwShort", {n: min});
+  if (pw2 !== undefined && pw !== pw2) return T("errPwMatch");
+  return null;
+}
+const lockMsg = key => { const w = waitLeft(key); return w ? T("errLocked", {s: w}) : null; };
+
+function enterStudent(s) {
+  session.sid = s.id; touch();
+  go(studentHome());
+}
+function logoutStudent(auto) {
+  session.sid = null; state.diag = state.practice = null;
+  if (auto) flash(T("idleOut"));
+  if (STUDENT_VIEWS.includes(state.view)) go("welcome"); else render();
+}
+function lockTeacher(auto) {
+  session.teacher = false; session.th = null; state.remote = null;
+  if (auto) flash(T("idleOut"));
+  prepareTeacher();
+  if (state.view === "teacher") go("teacher"); else render();
+}
+function removeStudent(id) {
+  db.students = db.students.filter(s => s.id !== id);
+  db.attempts = db.attempts.filter(a => a.sid !== id);
+  db.pendingDeletes = (db.pendingDeletes || []).concat(id);
+  save(); netStatus();
+  if (navigator.onLine) syncNow(true);
+}
+
+const forms = {
+ async login(f) {
+  if (!cryptoOK()) return say("#formMsg", T("errCrypto"));
+  const s = db.students.find(x => x.id === f.elements.sid.value), pw = f.elements.pw.value;
+  if (!s) return;
+  const lm = lockMsg("s" + s.id); if (lm) return say("#formMsg", lm);
+  if (s.needsPassword) {
+    const e = pwError(pw, undefined, PW_MIN_STUDENT); if (e) return say("#formMsg", e);
+    s.salt = randHex(16); s.iter = PBKDF2_ITER; s.hash = await pbkdf2(pw, s.salt, s.iter);
+    delete s.needsPassword; save();
+  } else if (await pbkdf2(pw, s.salt, s.iter) !== s.hash) {
+    failed("s" + s.id); return say("#formMsg", lockMsg("s" + s.id) || T("errWrongPw"));
+  }
+  succeeded("s" + s.id); enterStudent(s);
+ },
+ async create(f) {
+  if (!cryptoOK()) return say("#formMsg", T("errCrypto"));
+  const nick = cleanNick(f.elements.nick.value), pw = f.elements.pw.value, pw2 = f.elements.pw2.value;
+  const e = nickError(nick) || pwError(pw, pw2, PW_MIN_STUDENT);
+  if (e) return say("#formMsg", e);
+  if (!f.elements.consent.checked) return say("#formMsg", T("needConsent"));
+  const salt = randHex(16);
+  const s = {id: "s" + Date.now().toString(36) + randHex(3), name: nick, salt, iter: PBKDF2_ITER, hash: await pbkdf2(pw, salt), consent: true, created: Date.now()};
+  db.students.push(s); save();
+  enterStudent(s);
+ },
+ async rename(f) {
+  const nick = cleanNick(f.elements.nick.value), s = me();
+  const e = nickError(nick, s.id); if (e) return say("#formMsg", e);
+  if (nick === s.name) return say("#formMsg", T("nicknameSaved"), "good");
+  s.name = nick; s.renamePending = true; save(); chrome();
+  say("#formMsg", T("nicknameSaved"), "good");
+  if (navigator.onLine) syncNow(true);
+ },
+ async chpw(f) {
+  const s = me(), cur = f.elements.cur.value, pw = f.elements.pw.value;
+  const lm = lockMsg("s" + s.id); if (lm) return say("#formMsg", lm);
+  if (await pbkdf2(cur, s.salt, s.iter) !== s.hash) { failed("s" + s.id); return say("#formMsg", T("errWrongPw")); }
+  const e = pwError(pw, f.elements.pw2.value, PW_MIN_STUDENT); if (e) return say("#formMsg", e);
+  succeeded("s" + s.id);
+  s.salt = randHex(16); s.iter = PBKDF2_ITER; s.hash = await pbkdf2(pw, s.salt, s.iter); save();
+  f.reset(); say("#formMsg", T("passwordSaved"), "good");
+ },
+ async delacc(f) {
+  const s = me(), pw = f.elements.pw.value;
+  const lm = lockMsg("s" + s.id); if (lm) return say("#formMsg", lm);
+  if (await pbkdf2(pw, s.salt, s.iter) !== s.hash) { failed("s" + s.id); return say("#formMsg", T("errWrongPw")); }
+  if (!confirm(T("confirmDeleteAcc"))) return;
+  const id = s.id; session.sid = null; state.diag = state.practice = null;
+  removeStudent(id); flash(T("accountDeleted")); go("welcome");
+ },
+ async tlogin(f) {
+  if (!cryptoOK()) return say("#formMsg", T("errCrypto"));
+  const lm = lockMsg("t"); if (lm) return say("#formMsg", lm);
+  const salt = state.tGate.salt, th = await pbkdf2(f.elements.pw.value, salt), v = await sha256Hex(th);
+  if (db.teacher) {
+    if (v !== db.teacher.verifier) { failed("t"); return say("#formMsg", lockMsg("t") || T("wrongTeacherPw")); }
+  } else {
+    const j = await api({action:"class", th});
+    if (!j.ok) { if (j.status === 401) failed("t"); return say("#formMsg", j.status === 401 ? T("wrongTeacherPw") : j.error); }
+    db.teacher = {salt, verifier: v}; save(); state.remote = j.students;
+  }
+  succeeded("t"); session.teacher = true; session.th = th; touch(); go("teacher");
+ },
+ async tsetup(f) {
+  if (!cryptoOK()) return say("#formMsg", T("errCrypto"));
+  const pw = f.elements.pw.value, e = pwError(pw, f.elements.pw2.value, PW_MIN_TEACHER);
+  if (e) return say("#formMsg", e);
+  const salt = randHex(16), th = await pbkdf2(pw, salt);
+  if (serverAvailable()) {
+    const j = await api({action:"teacherSetup", salt, th, code: f.elements.code ? f.elements.code.value : ""});
+    if (!j.ok) {
+      if (j.status === 409) { await prepareTeacher(); flash(T("tExists")); return go("teacher"); }
+      return say("#formMsg", j.error);
+    }
+  }
+  db.teacher = {salt, verifier: await sha256Hex(th)}; save();
+  session.teacher = true; session.th = th; touch(); flash(T("teacherCreated")); go("teacher");
+ },
+ async tchpw(f) {
+  if (serverAvailable() && !navigator.onLine) return say("#formMsg", T("needTeacherOnline"));
+  const lm = lockMsg("t"); if (lm) return say("#formMsg", lm);
+  const cur = f.elements.cur.value, pw = f.elements.pw.value;
+  const thOld = await pbkdf2(cur, db.teacher.salt);
+  if (await sha256Hex(thOld) !== db.teacher.verifier) { failed("t"); return say("#formMsg", T("wrongTeacherPw")); }
+  const e = pwError(pw, f.elements.pw2.value, PW_MIN_TEACHER); if (e) return say("#formMsg", e);
+  const newSalt = randHex(16), newTh = await pbkdf2(pw, newSalt);
+  if (serverAvailable()) {
+    const j = await api({action:"teacherChangePassword", th: thOld, newSalt, newTh});
+    if (!j.ok) return say("#formMsg", j.error);
+  }
+  db.teacher = {salt: newSalt, verifier: await sha256Hex(newTh)}; save(); session.th = newTh;
+  f.reset(); say("#formMsg", T("tPwChanged"), "good");
+ }
+};
+
+/* ---------- Learning actions ---------- */
 function record(q, picked, mode) {
   const ok = picked === q.a;
-  db.attempts.push({sid: db.current, qid: q.id, topic: q.t, ok, mode, ts: Date.now(), synced: false});
+  db.attempts.push({sid: session.sid, qid: q.id, topic: q.t, ok, mode, ts: Date.now(), synced: false});
   save(); netStatus();
   return ok;
 }
 function pickPracticeQuestion(topic) {
   const mine = myAttempts();
-  const pool = QS.filter(q => q.t === topic);
   const lastSeen = q => Math.max(0, ...mine.filter(a => a.qid === q.id).map(a => a.ts));
-  return pool.sort((a, b) => lastSeen(a) - lastSeen(b))[0];   // least recently seen first
+  return QS.filter(q => q.t === topic).sort((a, b) => lastSeen(a) - lastSeen(b))[0];   // least recently seen first
 }
 function loadPractice(topic) {
   const q = pickPracticeQuestion(topic);
@@ -554,57 +987,51 @@ function speak() {
   u.lang = {en:"en-IN", hi:"hi-IN", ta:"ta-IN"}[lang()];
   speechSynthesis.cancel(); speechSynthesis.speak(u);
 }
-async function syncNow() {
-  const pend = db.attempts.filter(a => !a.synced);
-  if (!navigator.onLine) { $("#syncMsg").textContent = T("syncOffline"); return; }
-  if (!pend.length) { $("#syncMsg").textContent = T("syncedMsg"); return; }
-  try {
-    // Only a nickname, a random student id and the answers are sent. Nothing else leaves the device.
-    const nameOf = id => { const s = db.students.find(x => x.id === id); return s ? s.name : ""; };
-    const body = pend.map(a => ({sid: a.sid, name: nameOf(a.sid), qid: a.qid, topic: a.topic, ok: a.ok, ts: a.ts}));
-    if (SYNC_URL && location.protocol.startsWith("http")) {
-      const r = await fetch(SYNC_URL, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
-      if (!r.ok) throw new Error("bad status");
-    } else {
-      await new Promise(r => setTimeout(r, 600));   // simulated server for the demo
-    }
-    pend.forEach(a => a.synced = true); save();
-    $("#syncMsg").textContent = T("syncedMsg");
-  } catch { $("#syncMsg").textContent = T("syncFail"); }
-  netStatus();
-}
 
 /* ---------- Events ---------- */
-document.addEventListener("click", e => {
+const touch = () => { session.last = Date.now(); };
+["pointerdown", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, touch, {passive:true}));
+setInterval(() => {                                   // auto log-out on idle
+  if (Date.now() - session.last < IDLE_MS) return;
+  if (session.sid) logoutStudent(true);
+  if (session.teacher) lockTeacher(true);
+}, 15000);
+
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("form[data-form]"); if (!f) return;
+  e.preventDefault();
+  const btn = f.querySelector("button[type=submit]"); if (btn) btn.disabled = true;
+  try { await forms[f.dataset.form](f); }
+  catch { say("#formMsg", T("netErr")); }
+  finally { if (btn && btn.isConnected) btn.disabled = false; }
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.name === "opt") state.sel = +t.value;
+  else if (t.matches("[data-showpw]")) t.closest("form").querySelectorAll("input[data-pw]").forEach(i => i.type = t.checked ? "text" : "password");
+  else if (t.matches("[data-pick]")) { state.pickId = t.value; render(); }
+  else if (t.id === "sortSel") { state.sort = t.value; $("#rosterBox").innerHTML = rosterHTML(); }
+});
+document.addEventListener("input", e => { if (e.target.id === "q") { state.q = e.target.value; $("#rosterBox").innerHTML = rosterHTML(); } });
+
+document.addEventListener("click", async e => {
   const tab = e.target.closest("[data-tab]");
   if (tab) {
     const t = tab.dataset.tab;
-    go(t === "welcome" ? (me() && myAttempts().length ? "results" : "welcome") : t);
+    go(t === "welcome" ? (session.sid ? studentHome() : "welcome") : t);
     return;
   }
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act;
 
-  if (act === "begin") {
-    const name = $("#nick").value.trim();
-    if (!name || !$("#consent").checked) { say("#formMsg", T("needConsent")); return; }
-    const s = {id: "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, consent: true, created: Date.now()};
-    db.students.push(s); db.current = s.id; save();
-    state.diag = {i: 0, order: DIAG_ORDER.slice(), opts: []};
-    go("diag");
-  }
-  else if (act === "continue") {
-    db.current = b.dataset.id; save();
-    if (myAttempts().length) go("results");
-    else { state.diag = {i: 0, order: DIAG_ORDER.slice(), opts: []}; go("diag"); }
-  }
+  if (act === "authTab") { state.authTab = b.dataset.auth; render(); }
   else if (act === "diagNext") {
     if (state.sel === null) { say("#formMsg", T("pickAnswer")); return; }
     const d = state.diag, q = QS.find(x => x.id === d.order[d.i]);
     record(q, d.opts[d.i][state.sel], "diagnostic");
     state.sel = null; d.i++;
-    if (d.i >= d.order.length) go("results"); else { render(); }
-    if (state.view === "diag") { const l = app.querySelector("legend"); if (l) { l.tabIndex = -1; l.focus(); } }
+    if (d.i >= d.order.length) go("results");
+    else { render(); const l = app.querySelector("legend"); if (l) { l.tabIndex = -1; l.focus(); } }
   }
   else if (act === "practise") { loadPractice(b.dataset.topic); go("practice"); }
   else if (act === "check") {
@@ -613,37 +1040,64 @@ document.addEventListener("click", e => {
     p.ok = record(q, p.opts[state.sel], "practice"); p.checked = true; render();
   }
   else if (act === "practiceNext") {
-    const topic = state.practice.topic; loadPractice(topic); render();
+    loadPractice(state.practice.topic); render();
     const l = app.querySelector("legend"); if (l) { l.tabIndex = -1; l.focus(); }
   }
   else if (act === "toResults") go("results");
   else if (act === "listen") speak();
-  else if (act === "switch") { db.current = null; save(); go("welcome"); }
   else if (act === "toggleDemo") { db.settings.demo = !db.settings.demo; save(); render(); }
+  else if (act === "retryGate") { await prepareTeacher(); render(); }
+  else if (act === "exportCsv") exportCSV();
+  else if (act === "resetPw") {
+    const s = db.students.find(x => x.id === b.dataset.id); if (!s) return;
+    const pw = prompt(T("resetPrompt", {name: s.name}));
+    if (pw === null) return;
+    const err = pwError(pw, undefined, PW_MIN_STUDENT); if (err) { alert(err); return; }
+    s.salt = randHex(16); s.iter = PBKDF2_ITER; s.hash = await pbkdf2(pw, s.salt, s.iter); delete s.needsPassword; save();
+    flash(T("pwResetDone", {name: s.name})); render();
+  }
+  else if (act === "removeProfile") {
+    const s = db.students.find(x => x.id === b.dataset.id); if (!s) return;
+    if (!confirm(T("confirmRemove", {name: s.name}))) return;
+    if (session.sid === s.id) { session.sid = null; state.diag = state.practice = null; }
+    removeStudent(s.id); flash(T("removed")); render();
+  }
   else if (act === "wipe") {
     if (confirm(T("confirmDelete"))) {
-      const keep = db.settings; db = blank(); db.settings = keep; save();
-      state.diag = null; state.practice = null; render(); say("#formMsg", T("deleted"), "good");
+      // Remember which students to remove from the server copy too, then clear the device.
+      const keep = {settings: db.settings, pendingDeletes: db.students.map(s => s.id).concat(db.pendingDeletes || [])};
+      db = blank(); db.settings = keep.settings; db.pendingDeletes = keep.pendingDeletes; save();
+      session.sid = null; session.teacher = false; session.th = null; state.diag = state.practice = state.remote = null;
+      render(); say("#formMsg", T("deleted"), "good");
+      if (navigator.onLine) syncNow(true);
     }
   }
 });
-document.addEventListener("change", e => { if (e.target.name === "opt") state.sel = +e.target.value; });
 
 $("#lang").addEventListener("change", e => { db.settings.lang = e.target.value; save(); render(); });
 $("#btnContrast").addEventListener("click", () => { db.settings.contrast = !db.settings.contrast; save(); chrome(); });
 $("#btnSmall").addEventListener("click", () => { db.settings.scale = Math.max(.9, +(db.settings.scale - .1).toFixed(1)); save(); chrome(); });
 $("#btnLarge").addEventListener("click", () => { db.settings.scale = Math.min(1.5, +(db.settings.scale + .1).toFixed(1)); save(); chrome(); });
-$("#btnSync").addEventListener("click", syncNow);
+$("#btnSync").addEventListener("click", () => syncNow(false));
+$("#btnProfile").addEventListener("click", () => go("profile"));
+$("#btnLogout").addEventListener("click", () => { if (state.view === "teacher") lockTeacher(false); else logoutStudent(false); });
 $("#skip").addEventListener("click", e => { e.preventDefault(); app.focus(); });
-window.addEventListener("online", () => { netStatus(); syncNow(); });   // auto-sync when connectivity returns
+window.addEventListener("online", () => { netStatus(); syncNow(true); });
 window.addEventListener("offline", () => { netStatus(); $("#syncMsg").textContent = T("syncOffline"); });
 
+// "Install app" button (shown only when the browser offers installation)
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; $("#btnInstall").hidden = false; });
+$("#btnInstall").addEventListener("click", async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $("#btnInstall").hidden = true; });
+window.addEventListener("appinstalled", () => { $("#btnInstall").hidden = true; });
+
 /* ---------- Start ---------- */
-if (db.current && myAttempts().length) state.view = "results";
 render();
+if (db.pendingDeletes.length && navigator.onLine) syncNow(true);
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
+
 </script>
 </body>
 </html>
