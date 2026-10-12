@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartSlate - offline adaptive learning</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#14233C">
+<style>
+:root{
+  --bg:#F3F6FA; --ink:#14233C; --muted:#51607A; --card:#FFFFFF; --line:#CBD5E1; --grid:#E6ECF3;
+  --accent:#F4B400; --accent-ink:#14233C; --ok:#1E7B52; --warn:#9A6B00; --bad:#B23A2E; --focus:#1F5FBF;
+}
+:root[data-theme="contrast"]{
+  --bg:#000; --ink:#fff; --muted:#e8e8e8; --card:#000; --line:#fff; --grid:#2a2a2a;
+  --accent:#FFE600; --accent-ink:#000; --ok:#4DFF9A; --warn:#FFE600; --bad:#FF8A7A; --focus:#00E5FF;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);line-height:1.55;
+  font-family:"Noto Sans","Noto Sans Devanagari","Noto Sans Tamil",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:0 16px}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--accent);color:var(--accent-ink);padding:8px 12px;z-index:10}
+.skip:focus{left:8px}
+
+header.top{background:#14233C;color:#fff;padding:12px 0}
+:root[data-theme="contrast"] header.top{background:#000;border-bottom:2px solid #fff}
+.bar-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.brand{font-size:1.35rem;font-weight:800;letter-spacing:.2px;margin:0}
+.brand small{display:block;font-size:.78rem;font-weight:400;opacity:.85}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tools label{font-size:.85rem}
+select,input[type=text]{font:inherit;color:var(--ink);background:#fff;border:2px solid var(--line);border-radius:6px;padding:8px 10px;min-height:44px}
+:root[data-theme="contrast"] select,:root[data-theme="contrast"] input[type=text]{background:#000;color:#fff;border-color:#fff}
+.chip{font:inherit;font-size:.9rem;min-height:44px;min-width:44px;padding:6px 12px;border-radius:6px;border:2px solid #fff;background:transparent;color:#fff;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+.status{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px 0;font-size:.9rem}
+.pill{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--line);border-radius:999px;padding:2px 12px;background:var(--card)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+.pill[data-on="true"] .dot{background:var(--ok)}
+.sync-msg{color:var(--muted);margin:0}
+
+nav.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-top:4px;overflow-x:auto}
+nav.tabs button{font:inherit;font-weight:600;background:none;border:0;border-bottom:4px solid transparent;color:var(--muted);padding:12px 14px;min-height:44px;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+
+main{padding:20px 0 56px}
+h1,h2{line-height:1.25;margin:0 0 8px}
+h1{font-size:1.7rem}
+h2{font-size:1.3rem}
+h3{font-size:1.05rem;margin:20px 0 8px}
+.lead{max-width:62ch;color:var(--muted);margin:0 0 18px}
+.card{background:var(--card);border:2px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+
+/* The question card looks like a squared maths notebook page */
+.sheet{background-color:var(--card);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px;border:2px solid var(--line);border-left:6px solid var(--bad);border-radius:6px;padding:20px 20px 20px 22px}
+fieldset{border:0;margin:0;padding:0}
+legend{font-size:1.2rem;font-weight:600;padding:0;margin-bottom:14px;max-width:60ch}
+.opts{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.opt{position:relative}
+.opt input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+.opt span{display:block;padding:12px 14px;min-height:48px;border:2px solid var(--ink);border-radius:8px;background:var(--card);font-size:1.1rem;font-weight:600}
+.opt input:checked + span{background:var(--accent);color:var(--accent-ink);border-color:var(--accent-ink)}
+.opt input:focus-visible + span{outline:3px solid var(--focus);outline-offset:2px}
+.opt.right span{border-color:var(--ok);box-shadow:inset 0 0 0 2px var(--ok)}
+.opt.wrong span{border-color:var(--bad);box-shadow:inset 0 0 0 2px var(--bad)}
+
+.btn{font:inherit;font-weight:700;min-height:48px;padding:10px 20px;border-radius:8px;border:2px solid var(--ink);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.btn.secondary{background:var(--card);color:var(--ink)}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.btn.small{min-height:44px;padding:6px 14px;font-size:.92rem}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+.field{display:grid;gap:6px;margin-bottom:14px;max-width:420px}
+.check{display:flex;gap:10px;align-items:flex-start;max-width:60ch;margin-bottom:14px}
+.check input{width:24px;height:24px;margin-top:2px;flex:none}
+.msg{min-height:1.5em;margin:10px 0 0;font-weight:600}
+.msg.err{color:var(--bad)}
+.msg.good{color:var(--ok)}
+
+.meter{display:grid;grid-template-columns:minmax(120px,200px) 1fr auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.meter:first-of-type{border-top:0}
+.meter .name{font-weight:600}
+.bar{height:16px;border-radius:8px;background:var(--grid);border:1px solid var(--line);overflow:hidden}
+.bar span{display:block;height:100%;background:var(--bad)}
+.bar span.mid{background:var(--warn)}
+.bar span.hi{background:var(--ok)}
+@media (prefers-reduced-motion:no-preference){.bar span{transition:width .5s ease}}
+.tag{font-size:.82rem;color:var(--muted);font-weight:600}
+.here{display:inline-block;background:var(--accent);color:var(--accent-ink);border-radius:4px;padding:0 8px;font-size:.8rem;font-weight:700;margin-left:6px}
+.meter-actions{grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end}
+@media (max-width:620px){.meter{grid-template-columns:1fr}.meter-actions{justify-content:flex-start}}
+
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:700}
+.scroll{overflow-x:auto}
+ul.plain{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
+.progress{height:8px;border-radius:4px;background:var(--grid);margin-bottom:16px;overflow:hidden}
+.progress span{display:block;height:100%;background:var(--ink)}
+.feedback{font-weight:700;margin:14px 0 0}
+.feedback.ok{color:var(--ok)}
+.feedback.no{color:var(--bad)}
+.note{color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<a class="skip" href="#app" id="skip">Skip to content</a>
+
+<header class="top">
+  <div class="wrap bar-row">
+    <h1 class="brand">SmartSlate<small>Offline adaptive learning</small></h1>
+    <div class="tools">
+      <label for="lang" id="lblLang">Language</label>
+      <select id="lang">
+        <option value="en">English</option>
+        <option value="hi">हिन्दी</option>
+        <option value="ta">தமிழ்</option>
+      </select>
+      <button class="chip" id="btnSmall" type="button">A&minus;</button>
+      <button class="chip" id="btnLarge" type="button">A+</button>
+      <button class="chip" id="btnContrast" type="button" aria-pressed="false">High contrast</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="status">
+    <span class="pill" id="net" data-on="true"><span class="dot" aria-hidden="true"></span><span id="netText">Online</span></span>
+    <span id="pend">0</span>
+    <button class="btn secondary small" id="btnSync" type="button">Sync now</button>
+    <p class="sync-msg" id="syncMsg" role="status" aria-live="polite"></p>
+  </div>
+  <nav class="tabs" aria-label="Main">
+    <button type="button" data-tab="welcome" id="tabStudent">Student</button>
+    <button type="button" data-tab="teacher" id="tabTeacher">Teacher</button>
+    <button type="button" data-tab="privacy" id="tabPrivacy">Privacy and standards</button>
+  </nav>
+  <main id="app" tabindex="-1"></main>
+</div>
+
+<script>
+/* ============================================================
+   SmartSlate - offline-first adaptive practice (Class 7 Maths)
+   Single file, no external libraries, works with no internet.
+   ============================================================ */
+
+// Set this to your backend endpoint (e.g. a Flask/Node route that accepts POST JSON).
+// While empty, "Sync now" is simulated so you can demo the offline -> online flow.
+const SYNC_URL = "";
+
+const MASTERY_GOAL = 0.8;   // a topic turns green at 80% mastery
+const RISK_BELOW   = 0.5;   // students under 50% overall are flagged for the teacher
+
+/* ---------- Translations ---------- */
+const I18N = {
+ en:{
+  language:"Language", contrast:"High contrast", smaller:"Smaller text", larger:"Larger text",
+  online:"Online", offline:"Offline", pending:"{n} to sync", syncNow:"Sync now",
+  syncedMsg:"All answers synced.", syncOffline:"You are offline. Answers stay on this device until you connect.",
+  syncFail:"Sync failed. Your answers are safe on this device. Try again later.",
+  tabStudent:"Student", tabTeacher:"Teacher", tabPrivacy:"Privacy and standards",
+  welcomeTitle:"Find out what to practise next",
+  welcomeLead:"Answer 10 short Class 7 Maths questions. SmartSlate shows which topics need work. It works without internet.",
+  nickname:"Nickname (do not enter your full name)",
+  consent:"My parent or teacher agrees that my answers are saved on this device and shared with my teacher.",
+  start:"Start diagnostic", needConsent:"Enter a nickname and tick the consent box to continue.",
+  returning:"Returning students",
+  question:"Question {n} of {t}", listen:"Listen", next:"Next", finish:"See results",
+  pickAnswer:"Choose an answer to continue.", ttsMissing:"Audio is not available in this browser.",
+  hello:"Hello, {name}", resultsLead:"Start with the topic marked below. Practise until its bar turns green.",
+  overall:"Overall score", scoreOf:"{c} of {t} correct", mastery:"Mastery",
+  startHere:"Start here", needsWork:"Needs work", gettingThere:"Getting there", strong:"Strong",
+  practise:"Practise {topic}", practising:"Practising: {topic}", check:"Check answer", nextQ:"Next question",
+  correct:"Correct.", incorrect:"Not quite. The answer is {a}.", back:"Back to my path", switchStudent:"Switch student",
+  teacherTitle:"Class overview", weakTopics:"Weakest topics in the class", atRisk:"Students who need help",
+  noAtRisk:"No students are flagged right now.", noData:"No answers yet. Complete a diagnostic or show the sample students.",
+  demoNote:"This class includes 24 sample students for the demo.", hideDemo:"Hide sample students", showDemo:"Show sample students",
+  colStudent:"Student", colScore:"Score", colWeak:"Weakest topic", classAccuracy:"Class accuracy",
+  privacyTitle:"Privacy and standards", deleteData:"Delete all data on this device",
+  confirmDelete:"Delete all saved answers and students on this device?", deleted:"All data on this device was deleted."
+ },
+ hi:{
+  language:"भाषा", contrast:"उच्च कंट्रास्ट", smaller:"छोटा पाठ", larger:"बड़ा पाठ",
+  online:"ऑनलाइन", offline:"ऑफ़लाइन", pending:"{n} सिंक होने बाकी", syncNow:"अभी सिंक करें",
+  syncedMsg:"सभी उत्तर सिंक हो गए।", syncOffline:"आप ऑफ़लाइन हैं। जुड़ने तक उत्तर इसी उपकरण पर रहेंगे।",
+  syncFail:"सिंक नहीं हो सका। आपके उत्तर इस उपकरण पर सुरक्षित हैं। बाद में फिर कोशिश करें।",
+  tabStudent:"विद्यार्थी", tabTeacher:"शिक्षक", tabPrivacy:"गोपनीयता और मानक",
+  welcomeTitle:"जानिए आगे क्या अभ्यास करना है",
+  welcomeLead:"कक्षा 7 गणित के 10 छोटे प्रश्न हल कीजिए। SmartSlate बताएगा कि किन विषयों पर काम करना है। यह बिना इंटरनेट के चलता है।",
+  nickname:"उपनाम (पूरा नाम न लिखें)",
+  consent:"मेरे अभिभावक या शिक्षक सहमत हैं कि मेरे उत्तर इस उपकरण पर सहेजे जाएँ और मेरे शिक्षक के साथ साझा हों।",
+  start:"निदान परीक्षण शुरू करें", needConsent:"आगे बढ़ने के लिए उपनाम लिखें और सहमति बॉक्स पर टिक करें।",
+  returning:"पहले से जुड़े विद्यार्थी",
+  question:"प्रश्न {n} / {t}", listen:"सुनें", next:"आगे", finish:"परिणाम देखें",
+  pickAnswer:"आगे बढ़ने के लिए एक उत्तर चुनें।", ttsMissing:"इस ब्राउज़र में ऑडियो उपलब्ध नहीं है।",
+  hello:"नमस्ते, {name}", resultsLead:"नीचे चिह्नित विषय से शुरू कीजिए। जब तक उसकी पट्टी हरी न हो जाए, अभ्यास कीजिए।",
+  overall:"कुल अंक", scoreOf:"{t} में से {c} सही", mastery:"दक्षता",
+  startHere:"यहाँ से शुरू करें", needsWork:"और अभ्यास चाहिए", gettingThere:"प्रगति पर", strong:"मज़बूत",
+  practise:"{topic} का अभ्यास करें", practising:"अभ्यास: {topic}", check:"उत्तर जाँचें", nextQ:"अगला प्रश्न",
+  correct:"सही।", incorrect:"सही नहीं। उत्तर {a} है।", back:"मेरे मार्ग पर वापस", switchStudent:"विद्यार्थी बदलें",
+  teacherTitle:"कक्षा का सारांश", weakTopics:"कक्षा के सबसे कमज़ोर विषय", atRisk:"जिन विद्यार्थियों को मदद चाहिए",
+  noAtRisk:"अभी किसी विद्यार्थी को चिह्नित नहीं किया गया है।", noData:"अभी कोई उत्तर नहीं है। निदान परीक्षण पूरा करें या नमूना विद्यार्थी दिखाएँ।",
+  demoNote:"इस कक्षा में डेमो के लिए 24 नमूना विद्यार्थी शामिल हैं।", hideDemo:"नमूना विद्यार्थी छिपाएँ", showDemo:"नमूना विद्यार्थी दिखाएँ",
+  colStudent:"विद्यार्थी", colScore:"अंक", colWeak:"सबसे कमज़ोर विषय", classAccuracy:"कक्षा की सटीकता",
+  privacyTitle:"गोपनीयता और मानक", deleteData:"इस उपकरण का सारा डेटा हटाएँ",
+  confirmDelete:"इस उपकरण पर सहेजे गए सभी उत्तर और विद्यार्थी हटाएँ?", deleted:"इस उपकरण का सारा डेटा हटा दिया गया।"
+ },
+ ta:{
+  language:"மொழி", contrast:"அதிக வேறுபாடு", smaller:"சிறிய எழுத்து", larger:"பெரிய எழுத்து",
+  online:"இணையத்தில்", offline:"இணையம் இல்லை", pending:"{n} ஒத்திசைக்க உள்ளன", syncNow:"இப்போது ஒத்திசை",
+  syncedMsg:"அனைத்து விடைகளும் ஒத்திசைக்கப்பட்டன.", syncOffline:"இணையம் இல்லை. இணைக்கும் வரை விடைகள் இந்தச் சாதனத்திலேயே இருக்கும்.",
+  syncFail:"ஒத்திசைக்க முடியவில்லை. உங்கள் விடைகள் இந்தச் சாதனத்தில் பாதுகாப்பாக உள்ளன. பின்னர் மீண்டும் முயலவும்.",
+  tabStudent:"மாணவர்", tabTeacher:"ஆசிரியர்", tabPrivacy:"தனியுரிமையும் தரநிலைகளும்",
+  welcomeTitle:"அடுத்து எதைப் பயிற்சி செய்வது என்று அறிக",
+  welcomeLead:"7ஆம் வகுப்பு கணிதத்தின் 10 சிறு கேள்விகளுக்கு விடையளிக்கவும். எந்தப் பாடங்களில் பயிற்சி தேவை என்று SmartSlate காட்டும். இணையம் இல்லாமலும் இது இயங்கும்.",
+  nickname:"புனைபெயர் (முழுப் பெயரை எழுத வேண்டாம்)",
+  consent:"என் பெற்றோர் அல்லது ஆசிரியர், என் விடைகள் இந்தச் சாதனத்தில் சேமிக்கப்பட்டு என் ஆசிரியருடன் பகிரப்படுவதற்கு ஒப்புக்கொள்கிறார்.",
+  start:"கண்டறிதல் தேர்வைத் தொடங்கு", needConsent:"தொடர புனைபெயரை உள்ளிட்டு ஒப்புதல் பெட்டியைத் தேர்வு செய்யவும்.",
+  returning:"ஏற்கெனவே உள்ள மாணவர்கள்",
+  question:"கேள்வி {n} / {t}", listen:"கேளுங்கள்", next:"அடுத்து", finish:"முடிவுகளைப் பார்",
+  pickAnswer:"தொடர ஒரு விடையைத் தேர்வு செய்யவும்.", ttsMissing:"இந்த உலாவியில் ஒலி வசதி இல்லை.",
+  hello:"வணக்கம், {name}", resultsLead:"கீழே குறிக்கப்பட்ட பாடத்திலிருந்து தொடங்குங்கள். அதன் பட்டை பச்சையாகும் வரை பயிற்சி செய்யுங்கள்.",
+  overall:"மொத்த மதிப்பெண்", scoreOf:"{t} இல் {c} சரி", mastery:"தேர்ச்சி",
+  startHere:"இங்கே தொடங்குங்கள்", needsWork:"பயிற்சி தேவை", gettingThere:"முன்னேறுகிறது", strong:"வலுவானது",
+  practise:"{topic} பயிற்சி செய்", practising:"பயிற்சி: {topic}", check:"விடையைச் சரிபார்", nextQ:"அடுத்த கேள்வி",
+  correct:"சரி.", incorrect:"சரியல்ல. விடை {a}.", back:"என் பாதைக்குத் திரும்பு", switchStudent:"மாணவரை மாற்று",
+  teacherTitle:"வகுப்பு மேலோட்டம்", weakTopics:"வகுப்பில் மிகவும் பலவீனமான பாடங்கள்", atRisk:"உதவி தேவைப்படும் மாணவர்கள்",
+  noAtRisk:"இப்போது யாரும் குறிக்கப்படவில்லை.", noData:"இன்னும் விடைகள் இல்லை. கண்டறிதல் தேர்வை முடிக்கவும் அல்லது மாதிரி மாணவர்களைக் காட்டவும்.",
+  demoNote:"இந்த வகுப்பில் செயல்விளக்கத்துக்காக 24 மாதிரி மாணவர்கள் உள்ளனர்.", hideDemo:"மாதிரி மாணவர்களை மறை", showDemo:"மாதிரி மாணவர்களைக் காட்டு",
+  colStudent:"மாணவர்", colScore:"மதிப்பெண்", colWeak:"பலவீனமான பாடம்", classAccuracy:"வகுப்பின் துல்லியம்",
+  privacyTitle:"தனியுரிமையும் தரநிலைகளும்", deleteData:"இந்தச் சாதனத்தில் உள்ள அனைத்துத் தரவையும் நீக்கு",
+  confirmDelete:"இந்தச் சாதனத்தில் சேமித்த அனைத்து விடைகளையும் மாணவர்களையும் நீக்கலாமா?", deleted:"இந்தச் சாதனத்தில் உள்ள அனைத்துத் தரவும் நீக்கப்பட்டது."
+ }
+};
+
+/* ---------- Question bank (Class 7 Maths) ----------
+   d:true  = used in the 10-question diagnostic
+   d:false = extra practice questions                       */
+const TOPICS = [
+ {id:"int", n:{en:"Integers", hi:"पूर्णांक", ta:"முழு எண்கள்"}},
+ {id:"fra", n:{en:"Fractions", hi:"भिन्न", ta:"பின்னங்கள்"}},
+ {id:"equ", n:{en:"Simple equations", hi:"सरल समीकरण", ta:"எளிய சமன்பாடுகள்"}},
+ {id:"are", n:{en:"Perimeter and area", hi:"परिमाप और क्षेत्रफल", ta:"சுற்றளவும் பரப்பளவும்"}},
+ {id:"rat", n:{en:"Ratio and percentage", hi:"अनुपात और प्रतिशत", ta:"விகிதமும் சதவீதமும்"}}
+];
+const QS = [
+ {id:"i1",t:"int",d:true, s:{en:"Find (−8) + 12.",hi:"(−8) + 12 का मान ज्ञात कीजिए।",ta:"(−8) + 12 இன் மதிப்பைக் காண்க."},o:["4","−4","20","−20"],a:"4"},
+ {id:"f1",t:"fra",d:true, s:{en:"Find 1/2 + 1/4.",hi:"1/2 + 1/4 का मान ज्ञात कीजिए।",ta:"1/2 + 1/4 இன் மதிப்பைக் காண்க."},o:["3/4","2/6","1/6","3/8"],a:"3/4"},
+ {id:"e1",t:"equ",d:true, s:{en:"Solve: x + 7 = 15. What is x?",hi:"हल कीजिए: x + 7 = 15। x का मान क्या है?",ta:"தீர்க்க: x + 7 = 15. x இன் மதிப்பு என்ன?"},o:["8","22","7","9"],a:"8"},
+ {id:"a1",t:"are",d:true, s:{en:"A rectangle is 8 cm long and 5 cm wide. What is its area (cm²)?",hi:"एक आयत की लंबाई 8 सेमी और चौड़ाई 5 सेमी है। उसका क्षेत्रफल (सेमी²) क्या है?",ta:"ஒரு செவ்வகத்தின் நீளம் 8 செ.மீ, அகலம் 5 செ.மீ. அதன் பரப்பளவு (செ.மீ²) என்ன?"},o:["40","26","13","80"],a:"40"},
+ {id:"r1",t:"rat",d:true, s:{en:"What is 25% of 80?",hi:"80 का 25% कितना होता है?",ta:"80 இன் 25% எவ்வளவு?"},o:["20","25","32","55"],a:"20"},
+ {id:"i2",t:"int",d:true, s:{en:"Find (−3) × (−5).",hi:"(−3) × (−5) का मान ज्ञात कीजिए।",ta:"(−3) × (−5) இன் மதிப்பைக் காண்க."},o:["15","−15","8","−8"],a:"15"},
+ {id:"f2",t:"fra",d:true, s:{en:"What is 2/3 of 12?",hi:"12 का 2/3 कितना होता है?",ta:"12 இன் 2/3 பங்கு எவ்வளவு?"},o:["8","6","9","4"],a:"8"},
+ {id:"e2",t:"equ",d:true, s:{en:"Solve: 3x = 21. What is x?",hi:"हल कीजिए: 3x = 21। x का मान क्या है?",ta:"தீர்க்க: 3x = 21. x இன் மதிப்பு என்ன?"},o:["7","18","63","24"],a:"7"},
+ {id:"a2",t:"are",d:true, s:{en:"A square has sides of 6 cm. What is its perimeter (cm)?",hi:"एक वर्ग की भुजा 6 सेमी है। उसका परिमाप (सेमी) क्या है?",ta:"ஒரு சதுரத்தின் பக்கம் 6 செ.மீ. அதன் சுற்றளவு (செ.மீ) என்ன?"},o:["24","36","12","18"],a:"24"},
+ {id:"r2",t:"rat",d:true, s:{en:"Write the ratio 12 : 18 in its simplest form.",hi:"अनुपात 12 : 18 को सरलतम रूप में लिखिए।",ta:"விகிதம் 12 : 18 ஐ எளிய வடிவில் எழுதுக."},o:["2 : 3","3 : 2","4 : 5","6 : 9"],a:"2 : 3"},
+ {id:"i3",t:"int",d:false,s:{en:"Find 7 − (−4).",hi:"7 − (−4) का मान ज्ञात कीजिए।",ta:"7 − (−4) இன் மதிப்பைக் காண்க."},o:["11","3","−11","−3"],a:"11"},
+ {id:"i4",t:"int",d:false,s:{en:"Find (−20) ÷ 4.",hi:"(−20) ÷ 4 का मान ज्ञात कीजिए।",ta:"(−20) ÷ 4 இன் மதிப்பைக் காண்க."},o:["−5","5","−16","16"],a:"−5"},
+ {id:"f3",t:"fra",d:false,s:{en:"Find 3/5 − 1/5.",hi:"3/5 − 1/5 का मान ज्ञात कीजिए।",ta:"3/5 − 1/5 இன் மதிப்பைக் காண்க."},o:["2/5","4/5","2/10","3/10"],a:"2/5"},
+ {id:"f4",t:"fra",d:false,s:{en:"Find 1/2 × 1/3.",hi:"1/2 × 1/3 का मान ज्ञात कीजिए।",ta:"1/2 × 1/3 இன் மதிப்பைக் காண்க."},o:["1/6","5/6","2/5","1/5"],a:"1/6"},
+ {id:"e3",t:"equ",d:false,s:{en:"Solve: 2x + 3 = 11. What is x?",hi:"हल कीजिए: 2x + 3 = 11। x का मान क्या है?",ta:"தீர்க்க: 2x + 3 = 11. x இன் மதிப்பு என்ன?"},o:["4","7","5","14"],a:"4"},
+ {id:"e4",t:"equ",d:false,s:{en:"Solve: x ÷ 4 = 5. What is x?",hi:"हल कीजिए: x ÷ 4 = 5। x का मान क्या है?",ta:"தீர்க்க: x ÷ 4 = 5. x இன் மதிப்பு என்ன?"},o:["20","9","1","24"],a:"20"},
+ {id:"a3",t:"are",d:false,s:{en:"A triangle has base 10 cm and height 4 cm. What is its area (cm²)?",hi:"एक त्रिभुज का आधार 10 सेमी और ऊँचाई 4 सेमी है। उसका क्षेत्रफल (सेमी²) क्या है?",ta:"ஒரு முக்கோணத்தின் அடிப்பக்கம் 10 செ.மீ, உயரம் 4 செ.மீ. அதன் பரப்பளவு (செ.மீ²) என்ன?"},o:["20","40","14","28"],a:"20"},
+ {id:"a4",t:"are",d:false,s:{en:"A square has sides of 9 cm. What is its area (cm²)?",hi:"एक वर्ग की भुजा 9 सेमी है। उसका क्षेत्रफल (सेमी²) क्या है?",ta:"ஒரு சதுரத்தின் பக்கம் 9 செ.மீ. அதன் பரப்பளவு (செ.மீ²) என்ன?"},o:["81","36","18","45"],a:"81"},
+ {id:"r3",t:"rat",d:false,s:{en:"What is 10% of 250?",hi:"250 का 10% कितना होता है?",ta:"250 இன் 10% எவ்வளவு?"},o:["25","10","50","2.5"],a:"25"},
+ {id:"r4",t:"rat",d:false,s:{en:"3 pens cost ₹15. How much do 5 pens cost (₹)?",hi:"3 कलमों की कीमत ₹15 है। 5 कलमों की कीमत (₹) क्या होगी?",ta:"3 பேனாக்களின் விலை ₹15. 5 பேனாக்களின் விலை (₹) என்ன?"},o:["25","20","30","18"],a:"25"}
+];
+const DIAG_ORDER = ["i1","f1","e1","a1","r1","i2","f2","e2","a2","r2"];
+
+/* ---------- Storage (all on this device) ---------- */
+const KEY = "smartslate.v1";
+const blank = () => ({students:[], attempts:[], current:null, settings:{lang:"en", contrast:false, scale:1, demo:true}});
+let db;
+try { db = JSON.parse(localStorage.getItem(KEY)) || blank(); } catch { db = blank(); }
+db.settings = Object.assign(blank().settings, db.settings);
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {} };
+
+/* ---------- Helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const lang = () => db.settings.lang;
+const T = (k, v) => {
+  let s = (I18N[lang()] && I18N[lang()][k]) || I18N.en[k] || k;
+  if (v) for (const x in v) s = s.split("{" + x + "}").join(v[x]);
+  return s;
+};
+const tr = o => o[lang()] || o.en;
+const topicName = id => tr(TOPICS.find(t => t.id === id).n);
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pct = x => Math.round(x * 100);
+const fill = f => f >= MASTERY_GOAL ? "hi" : f >= 0.5 ? "mid" : "";
+const level = f => f >= MASTERY_GOAL ? T("strong") : f >= 0.5 ? T("gettingThere") : T("needsWork");
+
+/* ---------- Learning model ---------- */
+// Per-topic tally for a list of attempts.
+function tally(attempts) {
+  const per = {}; TOPICS.forEach(t => per[t.id] = {c:0, n:0});
+  attempts.forEach(a => { per[a.topic].n++; if (a.ok) per[a.topic].c++; });
+  const c = attempts.filter(a => a.ok).length;
+  return {per, c, n: attempts.length};
+}
+// Smoothed mastery: starts at 50% and moves with evidence.
+const mastery = p => (p.c + 1) / (p.n + 2);
+
+/* ---------- Sample class for the teacher demo (deterministic) ---------- */
+function demoClass() {
+  let a = 20260901;
+  const rnd = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const names = ["Arun","Meena","Ravi","Divya","Karthik","Priya","Sana","Imran","Lakshmi","Vikram","Anitha","Rohan","Fatima","Suresh","Kavya","Manoj","Nisha","Faisal","Deepa","Aman","Sneha","Bala","Pooja","Irfan"];
+  const bias = {int:.75, fra:.55, equ:.62, are:.42, rat:.35};   // this class is weakest on ratio and area
+  return names.map((name, i) => {
+    const ability = 0.25 + rnd() * 0.6, attempts = [];
+    TOPICS.forEach(t => {
+      const p = Math.min(.95, Math.max(.05, ability * .6 + bias[t.id] * .5 + (rnd() - .5) * .2));
+      for (let k = 0; k < 4; k++) attempts.push({topic: t.id, ok: rnd() < p});
+    });
+    return {id:"demo" + i, name, attempts, demo:true};
+  });
+}
+const DEMO = demoClass();
+function classRoster() {
+  const real = db.students.map(s => ({id:s.id, name:s.name, attempts: db.attempts.filter(a => a.sid === s.id), demo:false}));
+  return real.concat(db.settings.demo ? DEMO : []).filter(s => s.attempts.length);
+}
+
+/* ---------- App state ---------- */
+const state = {view:"welcome", diag:null, practice:null, sel:null, focus:false};
+const me = () => db.students.find(s => s.id === db.current);
+const myAttempts = () => db.attempts.filter(a => a.sid === db.current);
+function go(view) { state.view = view; state.sel = null; state.focus = true; render(); }
+
+/* ---------- Views ---------- */
+const views = {
+ welcome() {
+  const list = db.students.map(s => `<li><button type="button" class="btn secondary small" data-act="continue" data-id="${esc(s.id)}">${esc(s.name)}</button></li>`).join("");
+  return `
+   <h1>${T("welcomeTitle")}</h1>
+   <p class="lead">${T("welcomeLead")}</p>
+   <div class="card">
+     <div class="field"><label for="nick">${T("nickname")}</label>
+       <input type="text" id="nick" maxlength="20" autocomplete="off"></div>
+     <label class="check"><input type="checkbox" id="consent"><span>${T("consent")}</span></label>
+     <button type="button" class="btn" data-act="begin">${T("start")}</button>
+     <p class="msg err" id="formMsg" role="alert"></p>
+   </div>
+   ${list ? `<h2>${T("returning")}</h2><ul class="plain">${list}</ul>` : ""}`;
+ },
+
+ diag() {
+  const d = state.diag, q = QS.find(x => x.id === d.order[d.i]);
+  d.opts[d.i] = d.opts[d.i] || shuffle(q.o);
+  const last = d.i === d.order.length - 1;
+  return `
+   <div class="progress" aria-hidden="true"><span style="width:${(d.i / d.order.length) * 100}%"></span></div>
+   <p class="tag" id="qCount">${T("question", {n: d.i + 1, t: d.order.length})} &middot; ${esc(topicName(q.t))}</p>
+   ${questionCard(q, d.opts[d.i])}
+   <div class="row">
+     <button type="button" class="btn" data-act="diagNext">${last ? T("finish") : T("next")}</button>
+     <button type="button" class="btn secondary" data-act="listen">${T("listen")}</button>
+   </div>
+   <p class="msg err" id="formMsg" role="alert"></p>`;
+ },
+
+ results() {
+  const st = tally(myAttempts()), name = me() ? me().name : "";
+  const rows = TOPICS.map(t => ({t, m: mastery(st.per[t.id]), p: st.per[t.id]})).sort((a, b) => a.m - b.m);
+  const meters = rows.map((r, i) => `
+   <div class="meter">
+     <div class="name">${esc(topicName(r.t.id))}${i === 0 && r.m < MASTERY_GOAL ? `<span class="here">${T("startHere")}</span>` : ""}</div>
+     <div class="bar" role="progressbar" aria-label="${esc(topicName(r.t.id))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct(r.m)}"><span class="${fill(r.m)}" style="width:${pct(r.m)}%"></span></div>
+     <div class="tag">${pct(r.m)}% &middot; ${level(r.m)}</div>
+     <div class="meter-actions"><button type="button" class="btn ${i === 0 ? "" : "secondary"} small" data-act="practise" data-topic="${r.t.id}">${T("practise", {topic: topicName(r.t.id)})}</button></div>
+   </div>`).join("");
+  return `
+   <h1>${T("hello", {name: esc(name)})}</h1>
+   <p class="lead">${T("resultsLead")}</p>
+   <div class="card">
+     <p style="margin:0"><strong>${T("overall")}:</strong> ${pct(st.n ? st.c / st.n : 0)}% &middot; ${T("scoreOf", {c: st.c, t: st.n})}</p>
+   </div>
+   <div class="card"><h2>${T("mastery")}</h2>${meters}</div>
+   <button type="button" class="btn secondary" data-act="switch">${T("switchStudent")}</button>`;
+ },
+
+ practice() {
+  const p = state.practice, q = QS.find(x => x.id === p.qid);
+  const st = tally(myAttempts()), m = mastery(st.per[p.topic]);
+  const fb = p.checked
+    ? `<p class="feedback ${p.ok ? "ok" : "no"}" role="status">${p.ok ? T("correct") : T("incorrect", {a: esc(q.a)})}</p>` : `<p class="feedback" role="status"></p>`;
+  return `
+   <h1>${T("practising", {topic: esc(topicName(p.topic))})}</h1>
+   <div class="meter" style="border:0;padding-top:0">
+     <div class="tag">${T("mastery")}</div>
+     <div class="bar" role="progressbar" aria-label="${T("mastery")}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct(m)}"><span class="${fill(m)}" style="width:${pct(m)}%"></span></div>
+     <div class="tag">${pct(m)}% &middot; ${level(m)}</div>
+   </div>
+   ${questionCard(q, p.opts, p.checked)}
+   ${fb}
+   <div class="row">
+     ${p.checked ? `<button type="button" class="btn" data-act="practiceNext">${T("nextQ")}</button>`
+                 : `<button type="button" class="btn" data-act="check">${T("check")}</button>`}
+     <button type="button" class="btn secondary" data-act="listen">${T("listen")}</button>
+     <button type="button" class="btn secondary" data-act="toResults">${T("back")}</button>
+   </div>
+   <p class="msg err" id="formMsg" role="alert"></p>`;
+ },
+
+ teacher() {
+  const roster = classRoster();
+  const demoBtn = `<button type="button" class="btn secondary small" data-act="toggleDemo">${db.settings.demo ? T("hideDemo") : T("showDemo")}</button>`;
+  if (!roster.length) return `<h1>${T("teacherTitle")}</h1><p class="lead">${T("noData")}</p>${demoBtn}`;
+  const all = tally([].concat(...roster.map(s => s.attempts)));
+  const weak = TOPICS.map(t => ({t, f: all.per[t.id].n ? all.per[t.id].c / all.per[t.id].n : 0})).sort((a, b) => a.f - b.f);
+  const meters = weak.map(w => `
+   <div class="meter">
+     <div class="name">${esc(topicName(w.t.id))}</div>
+     <div class="bar" role="progressbar" aria-label="${esc(topicName(w.t.id))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct(w.f)}"><span class="${fill(w.f)}" style="width:${pct(w.f)}%"></span></div>
+     <div class="tag">${pct(w.f)}% &middot; ${level(w.f)}</div>
+   </div>`).join("");
+  const flagged = roster.map(s => {
+    const t = tally(s.attempts);
+    const worst = TOPICS.map(x => ({id: x.id, f: t.per[x.id].n ? t.per[x.id].c / t.per[x.id].n : 1})).sort((a, b) => a.f - b.f)[0];
+    return {name: s.name, f: t.n ? t.c / t.n : 0, c: t.c, n: t.n, worst: worst.id};
+  }).filter(s => s.f < RISK_BELOW).sort((a, b) => a.f - b.f).slice(0, 8);
+  const rows = flagged.map(s => `<tr><td>${esc(s.name)}</td><td>${pct(s.f)}% (${T("scoreOf", {c: s.c, t: s.n})})</td><td>${esc(topicName(s.worst))}</td></tr>`).join("");
+  return `
+   <h1>${T("teacherTitle")}</h1>
+   <p class="lead">${db.settings.demo ? T("demoNote") : ""}</p>
+   <div class="card"><h2>${T("weakTopics")}</h2>${meters}</div>
+   <div class="card"><h2>${T("atRisk")}</h2>
+     ${flagged.length ? `<div class="scroll"><table><thead><tr><th>${T("colStudent")}</th><th>${T("colScore")}</th><th>${T("colWeak")}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p>${T("noAtRisk")}</p>`}
+   </div>
+   ${demoBtn}`;
+ },
+
+ privacy() {
+  return `
+   <h1>${T("privacyTitle")}</h1>
+   <p class="lead">How SmartSlate's features line up with the BIS standards named in the problem statement. This is an indicative mapping for the hackathon, not a certification. Verify clause numbers on standards.bis.gov.in.</p>
+   <div class="card scroll"><table>
+     <thead><tr><th>What the app does</th><th>Standard and principle</th></tr></thead>
+     <tbody>
+      <tr><td>Asks for a nickname and a parent or teacher consent tick before saving anything.</td><td>IS 17428 (Data Privacy Assurance): consent, data minimization</td></tr>
+      <tr><td>Collects only a nickname and answers. The sync payload carries a random student id, never the nickname.</td><td>IS 17428: data minimization, purpose limitation</td></tr>
+      <tr><td>"Delete all data on this device" removes students and answers on demand.</td><td>IS 17428: retention limits, erasure</td></tr>
+      <tr><td>Stores data on the device, loads no third-party scripts or fonts, and sends only on an explicit or reconnect sync.</td><td>IS/ISO/IEC 27001: information security controls</td></tr>
+      <tr><td>Diagnostic, personalised practice path and class-wide teacher view.</td><td>IS/ISO 21001: learner focus, monitoring and measuring learning outcomes</td></tr>
+      <tr><td>Hindi, Tamil and English, read-aloud, adjustable text size and a high-contrast mode. All content is text, so nothing needs captions.</td><td>BIS / ICT accessibility guidance (check the latest version)</td></tr>
+     </tbody></table></div>
+   <button type="button" class="btn secondary" data-act="wipe">${T("deleteData")}</button>
+   <p class="msg good" id="formMsg" role="status"></p>`;
+ }
+};
+
+function questionCard(q, opts, checked) {
+  const p = state.practice;
+  const items = opts.map((o, i) => {
+    let cls = "opt";
+    if (checked) { if (o === q.a) cls += " right"; else if (state.sel === i) cls += " wrong"; }
+    return `<label class="${cls}"><input type="radio" name="opt" value="${i}" ${state.sel === i ? "checked" : ""} ${checked ? "disabled" : ""}><span>${esc(o)}</span></label>`;
+  }).join("");
+  return `<div class="sheet"><fieldset><legend>${esc(tr(q.s))}</legend><div class="opts">${items}</div></fieldset></div>`;
+}
+
+/* ---------- Rendering ---------- */
+function chrome() {
+  const root = document.documentElement;
+  root.lang = lang();
+  root.dataset.theme = db.settings.contrast ? "contrast" : "";
+  root.style.fontSize = (db.settings.scale * 100) + "%";
+  $("#lang").value = lang();
+  $("#lblLang").textContent = T("language");
+  $("#btnContrast").textContent = T("contrast");
+  $("#btnContrast").setAttribute("aria-pressed", db.settings.contrast);
+  $("#btnSmall").setAttribute("aria-label", T("smaller"));
+  $("#btnLarge").setAttribute("aria-label", T("larger"));
+  $("#tabStudent").textContent = T("tabStudent");
+  $("#tabTeacher").textContent = T("tabTeacher");
+  $("#tabPrivacy").textContent = T("tabPrivacy");
+  const studentViews = ["welcome", "diag", "results", "practice"];
+  $("#tabStudent").setAttribute("aria-current", studentViews.includes(state.view) ? "page" : "false");
+  $("#tabTeacher").setAttribute("aria-current", state.view === "teacher" ? "page" : "false");
+  $("#tabPrivacy").setAttribute("aria-current", state.view === "privacy" ? "page" : "false");
+  $("#btnSync").textContent = T("syncNow");
+  netStatus();
+}
+function netStatus() {
+  const on = navigator.onLine, n = db.attempts.filter(a => !a.synced).length;
+  $("#net").dataset.on = on;
+  $("#netText").textContent = on ? T("online") : T("offline");
+  $("#pend").textContent = T("pending", {n});
+}
+function render() {
+  chrome();
+  app.innerHTML = views[state.view]();
+  if (state.focus) { const h = app.querySelector("h1"); if (h) { h.tabIndex = -1; h.focus(); } state.focus = false; }
+}
+const app = $("#app");
+const say = (id, text, cls) => { const el = $(id); if (el) { el.textContent = text; if (cls) el.className = "msg " + cls; } };
+
+/* ---------- Actions ---------- */
+function record(q, picked, mode) {
+  const ok = picked === q.a;
+  db.attempts.push({sid: db.current, qid: q.id, topic: q.t, ok, mode, ts: Date.now(), synced: false});
+  save(); netStatus();
+  return ok;
+}
+function pickPracticeQuestion(topic) {
+  const mine = myAttempts();
+  const pool = QS.filter(q => q.t === topic);
+  const lastSeen = q => Math.max(0, ...mine.filter(a => a.qid === q.id).map(a => a.ts));
+  return pool.sort((a, b) => lastSeen(a) - lastSeen(b))[0];   // least recently seen first
+}
+function loadPractice(topic) {
+  const q = pickPracticeQuestion(topic);
+  state.practice = {topic, qid: q.id, opts: shuffle(q.o), checked: false, ok: false};
+  state.sel = null;
+}
+function speak() {
+  if (!("speechSynthesis" in window)) { say("#formMsg", T("ttsMissing")); return; }
+  const q = QS.find(x => x.id === (state.view === "diag" ? state.diag.order[state.diag.i] : state.practice.qid));
+  const opts = state.view === "diag" ? state.diag.opts[state.diag.i] : state.practice.opts;
+  const u = new SpeechSynthesisUtterance(tr(q.s) + " " + opts.join(", "));
+  u.lang = {en:"en-IN", hi:"hi-IN", ta:"ta-IN"}[lang()];
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+async function syncNow() {
+  const pend = db.attempts.filter(a => !a.synced);
+  if (!navigator.onLine) { $("#syncMsg").textContent = T("syncOffline"); return; }
+  if (!pend.length) { $("#syncMsg").textContent = T("syncedMsg"); return; }
+  try {
+    // Data minimisation: no nickname is sent, only the random student id and answers.
+    const body = pend.map(a => ({sid: a.sid, qid: a.qid, topic: a.topic, ok: a.ok, ts: a.ts}));
+    if (SYNC_URL) {
+      const r = await fetch(SYNC_URL, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+      if (!r.ok) throw new Error("bad status");
+    } else {
+      await new Promise(r => setTimeout(r, 600));   // simulated server for the demo
+    }
+    pend.forEach(a => a.synced = true); save();
+    $("#syncMsg").textContent = T("syncedMsg");
+  } catch { $("#syncMsg").textContent = T("syncFail"); }
+  netStatus();
+}
+
+/* ---------- Events ---------- */
+document.addEventListener("click", e => {
+  const tab = e.target.closest("[data-tab]");
+  if (tab) {
+    const t = tab.dataset.tab;
+    go(t === "welcome" ? (me() && myAttempts().length ? "results" : "welcome") : t);
+    return;
+  }
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act;
+
+  if (act === "begin") {
+    const name = $("#nick").value.trim();
+    if (!name || !$("#consent").checked) { say("#formMsg", T("needConsent")); return; }
+    const s = {id: "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, consent: true, created: Date.now()};
+    db.students.push(s); db.current = s.id; save();
+    state.diag = {i: 0, order: DIAG_ORDER.slice(), opts: []};
+    go("diag");
+  }
+  else if (act === "continue") {
+    db.current = b.dataset.id; save();
+    if (myAttempts().length) go("results");
+    else { state.diag = {i: 0, order: DIAG_ORDER.slice(), opts: []}; go("diag"); }
+  }
+  else if (act === "diagNext") {
+    if (state.sel === null) { say("#formMsg", T("pickAnswer")); return; }
+    const d = state.diag, q = QS.find(x => x.id === d.order[d.i]);
+    record(q, d.opts[d.i][state.sel], "diagnostic");
+    state.sel = null; d.i++;
+    if (d.i >= d.order.length) go("results"); else { render(); }
+    if (state.view === "diag") { const l = app.querySelector("legend"); if (l) { l.tabIndex = -1; l.focus(); } }
+  }
+  else if (act === "practise") { loadPractice(b.dataset.topic); go("practice"); }
+  else if (act === "check") {
+    if (state.sel === null) { say("#formMsg", T("pickAnswer")); return; }
+    const p = state.practice, q = QS.find(x => x.id === p.qid);
+    p.ok = record(q, p.opts[state.sel], "practice"); p.checked = true; render();
+  }
+  else if (act === "practiceNext") {
+    const topic = state.practice.topic; loadPractice(topic); render();
+    const l = app.querySelector("legend"); if (l) { l.tabIndex = -1; l.focus(); }
+  }
+  else if (act === "toResults") go("results");
+  else if (act === "listen") speak();
+  else if (act === "switch") { db.current = null; save(); go("welcome"); }
+  else if (act === "toggleDemo") { db.settings.demo = !db.settings.demo; save(); render(); }
+  else if (act === "wipe") {
+    if (confirm(T("confirmDelete"))) {
+      const keep = db.settings; db = blank(); db.settings = keep; save();
+      state.diag = null; state.practice = null; render(); say("#formMsg", T("deleted"), "good");
+    }
+  }
+});
+document.addEventListener("change", e => { if (e.target.name === "opt") state.sel = +e.target.value; });
+
+$("#lang").addEventListener("change", e => { db.settings.lang = e.target.value; save(); render(); });
+$("#btnContrast").addEventListener("click", () => { db.settings.contrast = !db.settings.contrast; save(); chrome(); });
+$("#btnSmall").addEventListener("click", () => { db.settings.scale = Math.max(.9, +(db.settings.scale - .1).toFixed(1)); save(); chrome(); });
+$("#btnLarge").addEventListener("click", () => { db.settings.scale = Math.min(1.5, +(db.settings.scale + .1).toFixed(1)); save(); chrome(); });
+$("#btnSync").addEventListener("click", syncNow);
+$("#skip").addEventListener("click", e => { e.preventDefault(); app.focus(); });
+window.addEventListener("online", () => { netStatus(); syncNow(); });   // auto-sync when connectivity returns
+window.addEventListener("offline", () => { netStatus(); $("#syncMsg").textContent = T("syncOffline"); });
+
+/* ---------- Start ---------- */
+if (db.current && myAttempts().length) state.view = "results";
+render();
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>

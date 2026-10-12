@@ -1,0 +1,10 @@
+{
+  "name": "SmartSlate - offline adaptive learning",
+  "short_name": "SmartSlate",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F3F6FA",
+  "theme_color": "#14233C",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
