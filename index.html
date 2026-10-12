@@ -148,9 +148,10 @@ ul.plain{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
    Single file, no external libraries, works with no internet.
    ============================================================ */
 
-// Set this to your backend endpoint (e.g. a Flask/Node route that accepts POST JSON).
-// While empty, "Sync now" is simulated so you can demo the offline -> online flow.
-const SYNC_URL = "";
+// Backend endpoints (Vercel serverless functions in the /api folder).
+// When the page is opened as a plain file (no web server), sync is simulated for the demo.
+const SYNC_URL  = "/api/sync";
+const CLASS_URL = "/api/class";
 
 const MASTERY_GOAL = 0.8;   // a topic turns green at 80% mastery
 const RISK_BELOW   = 0.5;   // students under 50% overall are flagged for the teacher
@@ -323,15 +324,41 @@ function demoClass() {
 }
 const DEMO = demoClass();
 function classRoster() {
-  const real = db.students.map(s => ({id:s.id, name:s.name, attempts: db.attempts.filter(a => a.sid === s.id), demo:false}));
-  return real.concat(db.settings.demo ? DEMO : []).filter(s => s.attempts.length);
+  // Students already synced to the server are shown from the server copy, so nobody is counted twice.
+  const remote = (state.remote || []).map(s => {
+    const attempts = [];
+    TOPICS.forEach(t => { const x = s.topics[t.id]; if (x) for (let k = 0; k < x.n; k++) attempts.push({topic: t.id, ok: k < x.c}); });
+    return {id: s.id, name: s.name, attempts, demo:false};
+  });
+  const seen = new Set(remote.map(s => s.id));
+  const real = db.students.filter(s => !seen.has(s.id))
+    .map(s => ({id:s.id, name:s.name, attempts: db.attempts.filter(a => a.sid === s.id), demo:false}));
+  return remote.concat(real, db.settings.demo ? DEMO : []).filter(s => s.attempts.length);
 }
 
 /* ---------- App state ---------- */
-const state = {view:"welcome", diag:null, practice:null, sel:null, focus:false};
+const state = {view:"welcome", diag:null, practice:null, sel:null, focus:false, remote:null};
 const me = () => db.students.find(s => s.id === db.current);
 const myAttempts = () => db.attempts.filter(a => a.sid === db.current);
-function go(view) { state.view = view; state.sel = null; state.focus = true; render(); }
+function go(view) { state.view = view; state.sel = null; state.focus = true; render(); if (view === "teacher") loadRemote(); }
+
+// Teacher view: fetch results synced from every student device.
+async function loadRemote() {
+  if (!SYNC_URL || !navigator.onLine || !location.protocol.startsWith("http")) return;
+  try {
+    const ask = pin => fetch(CLASS_URL, {headers: {"x-teacher-pin": pin}});
+    let pin = sessionStorage.getItem("ss.pin") || "";
+    let r = await ask(pin);
+    if (r.status === 401) {
+      pin = prompt("Teacher PIN") || "";
+      r = await ask(pin);
+      if (r.ok) sessionStorage.setItem("ss.pin", pin);
+    }
+    if (!r.ok) return;
+    state.remote = (await r.json()).students;
+    if (state.view === "teacher") { state.focus = false; render(); }
+  } catch {}
+}
 
 /* ---------- Views ---------- */
 const views = {
@@ -444,7 +471,7 @@ const views = {
      <thead><tr><th>What the app does</th><th>Standard and principle</th></tr></thead>
      <tbody>
       <tr><td>Asks for a nickname and a parent or teacher consent tick before saving anything.</td><td>IS 17428 (Data Privacy Assurance): consent, data minimization</td></tr>
-      <tr><td>Collects only a nickname and answers. The sync payload carries a random student id, never the nickname.</td><td>IS 17428: data minimization, purpose limitation</td></tr>
+      <tr><td>Collects only a nickname and answers. Sync sends just the nickname, a random student id and the answers, which is what the consent tick covers.</td><td>IS 17428: data minimization, purpose limitation</td></tr>
       <tr><td>"Delete all data on this device" removes students and answers on demand.</td><td>IS 17428: retention limits, erasure</td></tr>
       <tr><td>Stores data on the device, loads no third-party scripts or fonts, and sends only on an explicit or reconnect sync.</td><td>IS/ISO/IEC 27001: information security controls</td></tr>
       <tr><td>Diagnostic, personalised practice path and class-wide teacher view.</td><td>IS/ISO 21001: learner focus, monitoring and measuring learning outcomes</td></tr>
@@ -532,9 +559,10 @@ async function syncNow() {
   if (!navigator.onLine) { $("#syncMsg").textContent = T("syncOffline"); return; }
   if (!pend.length) { $("#syncMsg").textContent = T("syncedMsg"); return; }
   try {
-    // Data minimisation: no nickname is sent, only the random student id and answers.
-    const body = pend.map(a => ({sid: a.sid, qid: a.qid, topic: a.topic, ok: a.ok, ts: a.ts}));
-    if (SYNC_URL) {
+    // Only a nickname, a random student id and the answers are sent. Nothing else leaves the device.
+    const nameOf = id => { const s = db.students.find(x => x.id === id); return s ? s.name : ""; };
+    const body = pend.map(a => ({sid: a.sid, name: nameOf(a.sid), qid: a.qid, topic: a.topic, ok: a.ok, ts: a.ts}));
+    if (SYNC_URL && location.protocol.startsWith("http")) {
       const r = await fetch(SYNC_URL, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
       if (!r.ok) throw new Error("bad status");
     } else {
